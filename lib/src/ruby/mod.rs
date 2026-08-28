@@ -49,6 +49,7 @@ struct Emitted {
     clause_args: Vec<(SpecArg, Named)>,
     fields: HashMap<String, Field>,
     clause_field: Option<Field>,
+    external_field: Option<Field>,
     clause_class: Option<String>,
     clause_fields: HashMap<String, Field>,
     subcommands: Vec<usize>,
@@ -203,6 +204,7 @@ impl<'a> Emitter<'a> {
             clause_args,
             fields: HashMap::new(),
             clause_field: None,
+            external_field: None,
             clause_class,
             clause_fields: HashMap::new(),
             subcommands: Vec::new(),
@@ -473,6 +475,7 @@ impl<'a> Emitter<'a> {
                 )
                 .collect::<Vec<_>>();
             fields.extend(command.clause_field.iter());
+            fields.extend(command.external_field.iter());
             for at in &command.subcommands {
                 let child = &commands[*at];
                 fields.push(&command.fields[&child.named.key]);
@@ -522,7 +525,18 @@ impl<'a> Emitter<'a> {
 
     fn parse(&mut self, commands: &[Emitted]) {
         let root = &commands[0];
-        let _ = writeln!(self.out, "  def self.parse(args)");
+        if self.spec.multicall {
+            self.out
+                .push_str("  def self.parse(args = ARGV, argv0: nil)\n");
+            let _ = writeln!(
+                self.out,
+                "    args = Usage::Parser.rewrite_multicall(argv0, args, {}, {})",
+                ruby_string(&self.spec.name),
+                ruby_string(&self.spec.bin)
+            );
+        } else {
+            self.out.push_str("  def self.parse(args = ARGV)\n");
+        }
         self.out
             .push_str("    parsed = Usage::Parser.new(ROOT, META, args).parse\n");
         let _ = writeln!(self.out, "    cli = {}.new", root.class);
@@ -601,6 +615,23 @@ impl<'a> Emitter<'a> {
                 command.named.key
             );
         }
+        if commands.iter().any(|entry| entry.cmd.external_subcommand) {
+            self.out.push_str(
+                "\n    unless parsed.external.empty?\n      case parsed.command_keys.last\n",
+            );
+            for command in commands
+                .iter()
+                .filter(|entry| entry.cmd.external_subcommand)
+            {
+                let field = &command.external_field.as_ref().unwrap().name;
+                let _ = writeln!(
+                    self.out,
+                    "      when {}\n        cmds.fetch({}).{field} = parsed.external.dup",
+                    command.named.key, command.named.key
+                );
+            }
+            self.out.push_str("      end\n    end\n");
+        }
         self.out.push_str("\n    cli\n  end\n");
     }
 }
@@ -673,6 +704,10 @@ fn resolve_fields(commands: &mut [Emitted]) {
                 name: field_name(&clause.name, "clause", &mut taken),
                 kind: FieldKind::List,
             });
+            let external_field = command.cmd.external_subcommand.then(|| Field {
+                name: field_name("external", "external", &mut taken),
+                kind: FieldKind::List,
+            });
             for at in &command.subcommands {
                 let child = &commands[*at];
                 fields.insert(
@@ -698,13 +733,16 @@ fn resolve_fields(commands: &mut [Emitted]) {
                     )
                 })
                 .collect();
-            (fields, clause_field, clause_fields)
+            (fields, clause_field, external_field, clause_fields)
         })
         .collect::<Vec<_>>();
 
-    for (command, (fields, clause_field, clause_fields)) in commands.iter_mut().zip(layouts) {
+    for (command, (fields, clause_field, external_field, clause_fields)) in
+        commands.iter_mut().zip(layouts)
+    {
         command.fields = fields;
         command.clause_field = clause_field;
+        command.external_field = external_field;
         command.clause_fields = clause_fields;
     }
 }
@@ -1549,5 +1587,42 @@ mod tests {
         assert!(out.contains("parsed.occurrences(key)"), "{out}");
         assert!(out.contains("values.dup"), "{out}");
         assert!(!out.contains(".freeze"), "{out}");
+    }
+
+    #[test]
+    fn emits_runtime_routing_fields() {
+        let out = ruby(
+            r#"
+            name "busybox"
+            bin "busybox"
+            multicall #true
+            external_subcommand #true
+            flag "-v --verbose" count=#true
+            flag "--include <value>" var=#true
+        "#,
+        );
+        assert!(out.contains(":external"), "{out}");
+        assert!(out.contains("Usage::Parser.rewrite_multicall"), "{out}");
+        assert!(out.contains("argv0: nil"), "{out}");
+    }
+
+    #[test]
+    fn external_results_use_the_resolved_field_name() {
+        let out = ruby(
+            r#"
+            name "ex"
+            bin "ex"
+            external_subcommand #true
+            flag "--external"
+        "#,
+        );
+        assert!(
+            out.contains("attr_accessor :external, :external_external"),
+            "{out}"
+        );
+        assert!(
+            out.contains(".external_external = parsed.external.dup"),
+            "{out}"
+        );
     }
 }

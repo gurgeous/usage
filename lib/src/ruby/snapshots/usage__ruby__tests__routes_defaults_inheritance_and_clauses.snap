@@ -104,7 +104,7 @@ module Ex
   class ExecNestedCommand
   end
 
-  def self.parse(args)
+  def self.parse(args = ARGV)
     parsed = Usage::Parser.new(ROOT, META, args).parse
     cli = CLI.new
     cmds = { CMD_ROOT => cli }

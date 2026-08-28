@@ -81,9 +81,18 @@ run = [
     'cd benches/go && if go mod download >/dev/null 2>&1; then go test ./...; else echo "skipped: the benchmark frameworks could not be fetched"; fi',
 ]
 
+[tasks."install:ruby"]
+dir = "{{config_root}}/ruby/argv"
+run = 'bundle check || bundle install'
+
 [tasks."test:ruby"]
 dir = "{{config_root}}"
-run = 'mbx test -p usage-lib --all-features ruby'
+depends = ['install:ruby']
+run = [
+    'mbx build -p usage-cli',
+    'mbx test -p usage-lib --all-features ruby',
+    'cd ruby/argv && USAGE_BIN="{{config_root}}/target/debug/usage" bundle exec ruby -Ilib -Itest test/suite.rb',
+]
 
 [tasks.lint]
 depends = ['lint:*']
@@ -152,9 +161,12 @@ run = [
 
 [tasks."lint:ruby"]
 dir = "{{config_root}}"
-# The mise spec exercises the generator at realistic scale. `ruby -c` parses the
-# source without loading the future usage-rb runtime.
-run = 'mbx run -q -p usage-cli -- generate ruby -f benches/mise.usage.kdl | ruby -c'
+depends = ['install:ruby']
+run = [
+    'mbx run -q -p usage-cli -- generate ruby -f benches/mise.usage.kdl | ruby -c',
+    'cd ruby/argv && bundle exec standardrb',
+    'cd ruby/argv && gem build usage-rb.gemspec --output "{{config_root}}/target/usage-rb-test.gem"',
+]
 
 [tasks.lint-fix]
 run = [
@@ -165,7 +177,7 @@ run = [
 ]
 
 [tasks.ci]
-depends = ['test', 'test:go', 'lint']
+depends = ['test', 'test:go', 'test:ruby', 'lint']
 
 [tasks.pre-commit]
 depends = ['render', 'snapshots']
