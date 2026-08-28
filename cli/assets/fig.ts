@@ -741,6 +741,54 @@ const completionSpec: Fig.Spec = {
           ],
         },
         {
+          name: "ruby",
+          description: "Generate Ruby parse tables from a usage spec",
+          options: [
+            {
+              name: ["-f", "--file"],
+              description:
+                'A usage spec taken in as a file, use "-" to read from stdin',
+              isRepeatable: false,
+              args: {
+                name: "file",
+                template: "filepaths",
+              },
+            },
+            {
+              name: ["-o", "--out-file"],
+              description:
+                'File path where the generated Ruby source will be saved, or "-" for stdout',
+              isRepeatable: false,
+              args: {
+                name: "out_file",
+                template: "filepaths",
+              },
+            },
+            {
+              name: ["-m", "--module"],
+              description:
+                "Module for the generated code (defaults to the spec's bin name)",
+              isRepeatable: false,
+              args: {
+                name: "module",
+              },
+            },
+            {
+              name: "--spec",
+              description: "Raw string spec input",
+              isRepeatable: false,
+              args: {
+                name: "spec",
+              },
+            },
+            {
+              name: ["-h", "--help"],
+              description: "Print help",
+              isRepeatable: false,
+            },
+          ],
+        },
+        {
           name: "sdk",
           description: "Generate a type-safe SDK from a usage spec",
           options: [

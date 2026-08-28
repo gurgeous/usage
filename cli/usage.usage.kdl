@@ -356,6 +356,27 @@ Common sections: - 1: User commands - 5: File formats - 7: Miscellaneous - 8: Sy
         complete out_dir type=dir
         complete out_file type=path
     }
+    cmd ruby help="Generate Ruby parse tables from a usage spec" effect=read {
+        long_help #"""
+Generate Ruby parse tables from a usage spec
+
+The generated file is read by the `usage-rb` gem. It contains static parse tables, result classes, and a typed `parse` entry point.
+"""#
+        flag "-f --file" help="A usage spec taken in as a file, use \"-\" to read from stdin" {
+            arg <FILE>
+        }
+        flag "-o --out-file" help="File path where the generated Ruby source will be saved, or \"-\" for stdout" effect=write {
+            arg <OUT_FILE>
+        }
+        flag "-m --module" help="Module for the generated code (defaults to the spec's bin name)" {
+            arg <MODULE>
+        }
+        flag --spec help="Raw string spec input" overrides=--file required_unless=--file {
+            arg <SPEC>
+        }
+        flag "-h --help" help="Print help" action=help builtin=#true
+        complete out_file type=path
+    }
     cmd sdk help="Generate a type-safe SDK from a usage spec" effect=write {
         flag "-f --file" help="A usage spec taken in as a file" {
             arg <FILE>

@@ -12,6 +12,7 @@ mod json;
 mod json_schema;
 mod manpage;
 mod markdown;
+mod ruby;
 mod sdk;
 
 /// Generate completions, documentation, and other artifacts from usage specs
@@ -38,6 +39,7 @@ pub enum Command {
     JsonSchema(json_schema::JsonSchema),
     Manpage(manpage::Manpage),
     Markdown(markdown::Markdown),
+    Ruby(ruby::Ruby),
     Sdk(sdk::Sdk),
 }
 

@@ -34,6 +34,7 @@
 - [`usage generate json-schema [FLAGS]`](/cli/reference/generate/json-schema.md)
 - [`usage generate manpage <FLAGS>`](/cli/reference/generate/manpage.md)
 - [`usage generate markdown <FLAGS>`](/cli/reference/generate/markdown.md)
+- [`usage generate ruby [FLAGS]`](/cli/reference/generate/ruby.md)
 - [`usage generate sdk <FLAGS>`](/cli/reference/generate/sdk.md)
 - [`usage lint [FLAGS] <FILE>`](/cli/reference/lint.md)
 - [`usage mcp [-f --file <FILE>] [-s --spec <SPEC>]`](/cli/reference/mcp.md)

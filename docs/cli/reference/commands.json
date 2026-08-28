@@ -1485,6 +1485,115 @@
               }
             }
           },
+          "ruby": {
+            "full_cmd": ["generate", "ruby"],
+            "usage": "generate ruby [FLAGS]",
+            "subcommands": {},
+            "args": [],
+            "flags": [
+              {
+                "name": "file",
+                "usage": "-f --file <FILE>",
+                "help": "A usage spec taken in as a file, use \"-\" to read from stdin",
+                "help_first_line": "A usage spec taken in as a file, use \"-\" to read from stdin",
+                "short": ["f"],
+                "long": ["file"],
+                "hide": false,
+                "global": false,
+                "arg": {
+                  "name": "FILE",
+                  "usage": "<FILE>",
+                  "required": true,
+                  "double_dash": "Optional",
+                  "hide": false
+                }
+              },
+              {
+                "name": "out-file",
+                "usage": "-o --out-file <OUT_FILE>",
+                "help": "File path where the generated Ruby source will be saved, or \"-\" for stdout",
+                "help_first_line": "File path where the generated Ruby source will be saved, or \"-\" for stdout",
+                "short": ["o"],
+                "long": ["out-file"],
+                "hide": false,
+                "global": false,
+                "arg": {
+                  "name": "OUT_FILE",
+                  "usage": "<OUT_FILE>",
+                  "required": true,
+                  "double_dash": "Optional",
+                  "hide": false
+                },
+                "effect": "write"
+              },
+              {
+                "name": "module",
+                "usage": "-m --module <MODULE>",
+                "help": "Module for the generated code (defaults to the spec's bin name)",
+                "help_first_line": "Module for the generated code (defaults to the spec's bin name)",
+                "short": ["m"],
+                "long": ["module"],
+                "hide": false,
+                "global": false,
+                "arg": {
+                  "name": "MODULE",
+                  "usage": "<MODULE>",
+                  "required": true,
+                  "double_dash": "Optional",
+                  "hide": false
+                }
+              },
+              {
+                "name": "spec",
+                "usage": "--spec <SPEC>",
+                "help": "Raw string spec input",
+                "help_first_line": "Raw string spec input",
+                "short": [],
+                "long": ["spec"],
+                "required_unless": ["--file"],
+                "hide": false,
+                "global": false,
+                "arg": {
+                  "name": "SPEC",
+                  "usage": "<SPEC>",
+                  "required": true,
+                  "double_dash": "Optional",
+                  "hide": false
+                },
+                "overrides": ["--file"]
+              },
+              {
+                "name": "help",
+                "usage": "-h --help",
+                "help": "Print help",
+                "help_first_line": "Print help",
+                "short": ["h"],
+                "long": ["help"],
+                "hide": false,
+                "global": false,
+                "action": "help",
+                "builtin": true
+              }
+            ],
+            "mounts": [],
+            "effect": "read",
+            "unknown_flags": null,
+            "hide": false,
+            "args_override_self": true,
+            "help": "Generate Ruby parse tables from a usage spec",
+            "help_long": "Generate Ruby parse tables from a usage spec\n\nThe generated file is read by the `usage-rb` gem. It contains static parse tables, result classes, and a typed `parse` entry point.",
+            "name": "ruby",
+            "aliases": [],
+            "hidden_aliases": [],
+            "examples": [],
+            "headings": [],
+            "complete": {
+              "out_file": {
+                "name": "out_file",
+                "type_": "path"
+              }
+            }
+          },
           "sdk": {
             "full_cmd": ["generate", "sdk"],
             "usage": "generate sdk <FLAGS>",

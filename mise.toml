@@ -23,6 +23,7 @@ shellcheck = "latest"
 go = "1.26"
 node = "24"
 python = "latest"
+ruby = "3.3"
 "npm:tsc" = "latest"
 
 [tasks.autofix]
@@ -79,6 +80,10 @@ run = [
     'cd integrations/cobra && go test ./...',
     'cd benches/go && if go mod download >/dev/null 2>&1; then go test ./...; else echo "skipped: the benchmark frameworks could not be fetched"; fi',
 ]
+
+[tasks."test:ruby"]
+dir = "{{config_root}}"
+run = 'mbx test -p usage-lib --all-features ruby'
 
 [tasks.lint]
 depends = ['lint:*']
@@ -144,6 +149,12 @@ run = [
     'cd go && go vet ./...',
     'cd benches/go && if go mod download >/dev/null 2>&1; then go vet ./...; else echo "skipped: the benchmark frameworks could not be fetched"; fi',
 ]
+
+[tasks."lint:ruby"]
+dir = "{{config_root}}"
+# The mise spec exercises the generator at realistic scale. `ruby -c` parses the
+# source without loading the future usage-rb runtime.
+run = 'mbx run -q -p usage-cli -- generate ruby -f benches/mise.usage.kdl | ruby -c'
 
 [tasks.lint-fix]
 run = [

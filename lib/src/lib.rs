@@ -45,6 +45,7 @@ pub mod docs;
 pub mod go;
 pub mod help_template;
 pub mod parse;
+pub mod ruby;
 pub mod sdk;
 pub mod sh;
 #[doc(hidden)]

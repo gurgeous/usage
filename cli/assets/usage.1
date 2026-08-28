@@ -89,6 +89,9 @@ Generate markdown documentation from usage specs
 \fIAliases: \fRmd
 .RE
 .TP
+\fBgenerate ruby\fR
+Generate Ruby parse tables from a usage spec
+.TP
 \fBgenerate sdk\fR
 Generate a type\-safe SDK from a usage spec
 .TP
@@ -532,6 +535,30 @@ Prefix to add to all URLs
 .TP
 \fB\-\-template\fR \fI<TEMPLATE>\fR
 Override a Tera template with NAME=PATH
+.TP
+\fB\-h, \-\-help\fR
+Print help
+.SH "USAGE GENERATE RUBY"
+Generate Ruby parse tables from a usage spec
+
+The generated file is read by the `usage\-rb` gem. It contains static parse tables, result classes, and a typed `parse` entry point.
+.PP
+\fBUsage:\fR usage generate ruby [OPTIONS]
+.PP
+\fBOptions:\fR
+.PP
+.TP
+\fB\-f, \-\-file\fR \fI<FILE>\fR
+A usage spec taken in as a file, use "\-" to read from stdin
+.TP
+\fB\-o, \-\-out\-file\fR \fI<OUT_FILE>\fR
+File path where the generated Ruby source will be saved, or "\-" for stdout
+.TP
+\fB\-m, \-\-module\fR \fI<MODULE>\fR
+Module for the generated code (defaults to the spec's bin name)
+.TP
+\fB\-\-spec\fR \fI<SPEC>\fR
+Raw string spec input
 .TP
 \fB\-h, \-\-help\fR
 Print help
