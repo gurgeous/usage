@@ -373,11 +373,7 @@ impl<'a> Emitter<'a> {
             if effective_unknown_flags(self.spec, commands, index) == UnknownFlags::Error {
                 fields.push(("unknown_flags", ":error".into()));
             }
-            push_true(
-                &mut fields,
-                "external_cmd",
-                command.cmd.external_subcommand,
-            );
+            push_true(&mut fields, "external_cmd", command.cmd.external_subcommand);
             push_true(
                 &mut fields,
                 "arg_required_else_help",
@@ -986,7 +982,15 @@ fn flag_meta(flag: &SpecFlag, named: &Named, owner: &Emitted, commands: &[Emitte
     }
     if let Some(arg) = &flag.arg {
         fields.push(("value_name", ruby_string(&arg.name)));
+        if let Some(value) = arg.delimiter {
+            fields.push(("delimiter", ruby_string(&value.to_string())));
+        }
     }
+    push_true(
+        &mut fields,
+        "variadic",
+        flag.var || flag.arg.as_ref().is_some_and(|arg| arg.var),
+    );
     if let Some(choices) = flag.arg.as_ref().and_then(|arg| arg.choices.as_ref()) {
         choice_fields(&mut fields, choices);
     }
@@ -1091,6 +1095,10 @@ fn flag_meta(flag: &SpecFlag, named: &Named, owner: &Emitted, commands: &[Emitte
 fn arg_meta(arg: &SpecArg, named: &Named, owner: &Emitted, commands: &[Emitted]) -> String {
     let mut fields = vec![("key", named.key.clone()), ("name", ruby_string(&arg.name))];
     push_true(&mut fields, "required", arg.required);
+    push_true(&mut fields, "variadic", arg.var);
+    if let Some(value) = arg.delimiter {
+        fields.push(("delimiter", ruby_string(&value.to_string())));
+    }
     if let Some(choices) = &arg.choices {
         choice_fields(&mut fields, choices);
     }

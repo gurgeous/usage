@@ -37,6 +37,23 @@
       "layer": "post-binding"
     },
     {
+      "id": "env-values-use-delimiter",
+      "doc": "A delimiter splits an environment fallback for a variadic flag.",
+      "spec": "name \"ex\"\nbin \"ex\"\nflag \"--tag <tag>\" var=#true delimiter=\",\" env=\"EX_TAGS\"\n",
+      "argv": [],
+      "env": { "EX_TAGS": "a,b" },
+      "expect": { "ok": { "flags": { "tag": ["a", "b"] } } },
+      "layer": "post-binding"
+    },
+    {
+      "id": "default-values-use-delimiter",
+      "doc": "A delimiter splits a default fallback for a variadic flag.",
+      "spec": "name \"ex\"\nbin \"ex\"\nflag \"--tag <tag>\" var=#true delimiter=\",\" default=\"a,b\"\n",
+      "argv": [],
+      "expect": { "ok": { "flags": { "tag": ["a", "b"] } } },
+      "layer": "post-binding"
+    },
+    {
       "id": "env-empty-string-counts-as-set",
       "doc": "An env var set to the empty string is set. Treating empty as unset would make `EX_JOBS=` mean something different from every other empty value in the grammar.",
       "spec": "name \"ex\"\nbin \"ex\"\nflag \"--jobs <n>\" env=\"EX_JOBS\" default=\"1\"\n",

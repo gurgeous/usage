@@ -1,6 +1,5 @@
 module Usage
   class Parser
-    MAX_DEPTH = 16
     HELP_SHORT = Flag.new(key: 0, name: "help", shorts: ["h"], action: :help_short)
     VERSION_SHORT = Flag.new(key: 0, name: "version", shorts: ["V"], action: :version)
 
@@ -137,7 +136,7 @@ module Usage
           raise Error, "unknown flag: #{token}" if cmd.unknown_flags == :error
           return word(token)
         end
-        @bundle, @bundle_token = token[1..], token
+        @bundle = token[1..]
         return short_flag
       end
       word(token)
@@ -173,11 +172,13 @@ module Usage
     def short_flag
       letter, rest = @bundle[0], @bundle[1..]
       flag = find_short(letter)
-      raise Error, "unknown flag: #{@bundle_token}" unless flag
+      action = flag.action && flag.action != :set
       unless flag.takes_value
         @bundle = rest
-        @bundle = "" if flag.action && flag.action != :set
-        return action!(flag) if flag.action && flag.action != :set
+        if action
+          @bundle = ""
+          return action!(flag)
+        end
         return bind_flag(flag, nil, false)
       end
 
@@ -190,7 +191,7 @@ module Usage
         rest
       end
       start_collecting(flag, value) if flag.variadic && !value.nil?
-      return action!(flag) if flag.action && flag.action != :set
+      return action!(flag) if action
       bind_flag(flag, value, !value.nil?)
     end
 
@@ -217,7 +218,6 @@ module Usage
       case flag.action
       when :help, :help_short, :help_long, :help_all then raise Help, "help requested"
       when :version then raise Version, "version requested"
-      else bind_flag(flag, nil, false)
       end
     end
 
@@ -239,12 +239,13 @@ module Usage
         accepts_negative = default && negative_number?(token) && default.args.first&.allow_negative_numbers
         if default && !default_taken && (!flag_like?(token) || accepts_negative) && token != "--"
           @default_taken = true
-          descend(default)
           @pos -= 1
-          cmd_starts[default.key] = @pos
+          descend(default)
           return
         end
-        return bind_sigil(token) if match_sigil(token)
+        if (matched = match_sigil(token))
+          return bind_sigil(token, matched)
+        end
         if cmd.external_cmd && (!flag_like?(token) || negative_number?(token)) && !%w[-- -].include?(token)
           @external = [token, *argv[@pos..]]
           @pos = argv.length
@@ -252,7 +253,9 @@ module Usage
         end
       end
 
-      return bind_sigil(token) if @arg_filled && match_sigil(token)
+      if @arg_filled && (matched = match_sigil(token))
+        return bind_sigil(token, matched)
+      end
 
       skip_sigil_arguments
       reserve_for_required
@@ -292,15 +295,14 @@ module Usage
       item.values.concat(split_value(value, delimit ? arg.delimiter : nil))
     end
 
-    def bind_sigil(token)
-      arg, sigil = match_sigil(token)
+    def bind_sigil(token, matched)
+      arg, sigil = matched
       raise Error, "invalid value for #{arg.name}: #{token}: expected a value after sigil #{sigil}" if token == sigil
       @cmd_arg_found = true
       bind_argument(arg, token[sigil.length..])
     end
 
     def descend(command)
-      raise Error, "command tree deeper than 16 levels" if ancestors.length >= MAX_DEPTH
       ancestors << cmd
       @cmd = command
       cmd_path << command
@@ -339,7 +341,7 @@ module Usage
       apply_default_if(final, scope)
       ordered.each do |key|
         if lost[key]
-          check_choices(metadata[key], displaced[key] || [])
+          check_choices(metadata[key], displaced[key])
         else
           check_entry(metadata[key], final[key], requirements.fetch(key, true))
         end
@@ -365,11 +367,16 @@ module Usage
       end
       if meta
         [meta[:env], *meta.fetch(:env_fallback, []), *meta.fetch(:deprecated_env, [])].compact.each do |name|
-          return {values: [env[name]], source: :env, occurrences: bound&.occurrences.to_i, negated: bound&.negated} if env.key?(name)
+          if env.key?(name)
+            values = fallback_values(meta, [env[name]])
+            return {values: values, source: :env, occurrences: bound&.occurrences.to_i, negated: bound&.negated}
+          end
         end
         unless meta.fetch(:default_if, []).any?
           defaults = meta.fetch(:default, [])
-          return {values: defaults.dup, source: :default, occurrences: 0, negated: false} unless defaults.empty?
+          unless defaults.empty?
+            return {values: fallback_values(meta, defaults), source: :default, occurrences: 0, negated: false}
+          end
         end
       end
       {values: [], source: :unset, occurrences: bound&.occurrences.to_i, negated: bound&.negated}
@@ -378,10 +385,12 @@ module Usage
     def apply_overrides
       lost = {}
       bound.each do |key, item|
-        metadata[key]&.fetch(:overrides, [])&.each do |other|
+        metadata[key].fetch(:overrides, []).each do |other|
           next unless bound[other]
-          if bound[other].at < item.at then lost[other] = true
-          elsif item.at < bound[other].at then lost[key] = true
+          if bound[other].at < item.at
+            lost[other] = true
+          elsif item.at < bound[other].at
+            lost[key] = true
           end
         end
       end
@@ -398,15 +407,13 @@ module Usage
           next false unless selector && %i[argv env].include?(selector[:source])
           !entry.key?(:when) || relationship_values(metadata[entry[:key]], selector).include?(entry[:when])
         end
-        value = condition && condition[:value]
-        value ||= meta.fetch(:default, []).first
-        next if value.nil?
-        item[:values], item[:source] = [value], :default
+        values = condition ? [condition[:value]] : meta.fetch(:default, [])
+        next if values.empty?
+        item[:values], item[:source] = fallback_values(meta, values), :default
       end
     end
 
     def check_entry(meta, item, check_requirements = true)
-      return unless meta && item
       raise Error, "flag given more than once: #{meta[:name]}" if meta[:reject_duplicate] && item[:occurrences] > 1
       if check_requirements && meta[:required] && item[:values].empty? && item[:occurrences].zero?
         missing!(meta)
@@ -557,6 +564,11 @@ module Usage
 
     def split_value(value, delimiter)
       present?(delimiter) ? value.split(delimiter, -1) : [value]
+    end
+
+    def fallback_values(meta, values)
+      values = values.flat_map { split_value(_1, meta[:delimiter]) }
+      meta[:variadic] ? values : values.first(1)
     end
 
     # one-liners
