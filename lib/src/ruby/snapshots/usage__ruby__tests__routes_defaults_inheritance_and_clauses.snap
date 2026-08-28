@@ -23,7 +23,7 @@ module Ex
     cmd_exec = Usage::Command.new(
       name: "exec",
       key: CMD_EXEC,
-      subcommands: [cmd_exec_nested],
+      cmds: [cmd_exec_nested],
     )
     cmd_run = Usage::Command.new(
       name: "run",
@@ -38,8 +38,8 @@ module Ex
       clause: Usage::Clause.new(
         key: CMD_RUN,
         name: "items",
-        separator: ":::",
-        arguments: [
+        sep: ":::",
+        args: [
           Usage::Argument.new(
             key: ARG_RUN_ITEMS_TASK,
             name: "task",
@@ -52,9 +52,9 @@ module Ex
     Usage::Command.new(
       name: "ex",
       key: CMD_ROOT,
-      subcommands: [cmd_run, cmd_exec],
+      cmds: [cmd_run, cmd_exec],
       unknown_flags: :error,
-      default_subcommand: cmd_run,
+      default_cmd: cmd_run,
     )
   end
 
@@ -109,7 +109,7 @@ module Ex
     cli = CLI.new
     cmds = { CMD_ROOT => cli }
 
-    parsed.command_keys.drop(1).each do |key|
+    parsed.cmd_keys.drop(1).each do |key|
       case key
       when CMD_RUN
         cmds.fetch(CMD_ROOT).run = cmds[key] = RunCommand.new

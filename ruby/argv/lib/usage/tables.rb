@@ -1,18 +1,17 @@
 module Usage
   Command = Struct.new(*%i[
-    aliases allow_missing_positional arg_required_else_help arguments
-    arguments_conflict_with_subcommands clause default_subcommand
-    disable_help_flag disable_help_subcommand disable_version_flag
-    dont_delimit_trailing_values external_subcommand flags key name
-    subcommand_negates_requirements subcommand_precedence_over_argument
-    subcommands unknown_flags version
+    aliases allow_missing_positional arg_required_else_help args
+    args_conflict_with_cmds clause cmd_negates_requirements
+    cmd_precedence_over_arg cmds default_cmd disable_help_cmd
+    disable_help_flag disable_version_flag dont_delimit_trailing_values
+    external_cmd flags key name unknown_flags version
   ]) do
     def initialize(key:, name:, **)
       super
       self.aliases ||= []
-      self.arguments ||= []
+      self.args ||= []
+      self.cmds ||= []
       self.flags ||= []
-      self.subcommands ||= []
       self.unknown_flags ||= :value
     end
   end
@@ -36,23 +35,19 @@ module Usage
     allow_negative_numbers delimiter double_dash key name required sigil
     value_terminator var_max variadic
   ]) do
-    def initialize(key:, name:, **) = super
-  end
-
-  Clause = Struct.new(*%i[arguments key name separator]) do
-    def initialize(key:, name:, separator:, **)
+    def initialize(key:, name:, **)
       super
-      self.arguments ||= []
     end
   end
 
-  class Metadata
-    attr_reader :entries
-
-    def initialize(entries)
-      @entries = entries
+  Clause = Struct.new(*%i[args key name sep]) do
+    def initialize(key:, name:, sep:, **)
+      super
+      self.args ||= []
     end
+  end
 
+  Metadata = Struct.new(:entries) do
     def [](key)
       return if key <= 0
 

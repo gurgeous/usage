@@ -4,16 +4,16 @@ class ParserTest < Minitest::Test
   def test_flags_arguments_and_subcommands
     force = Usage::Flag.new(key: 3, name: "force", longs: ["force"])
     package = Usage::Argument.new(key: 4, name: "package", required: true)
-    install = Usage::Command.new(name: "install", key: 2, flags: [force], arguments: [package])
+    install = Usage::Command.new(name: "install", key: 2, flags: [force], args: [package])
     verbose = Usage::Flag.new(key: 5, name: "verbose", shorts: ["v"], global: true)
-    root = Usage::Command.new(name: "", key: 1, flags: [verbose], subcommands: [install], unknown_flags: :error)
+    root = Usage::Command.new(name: "", key: 1, flags: [verbose], cmds: [install], unknown_flags: :error)
     meta = metadata(nil, nil, {key: 3, name: "force", flag: true, boolean: true},
       {key: 4, name: "package", required: true},
       {key: 5, name: "verbose", flag: true, boolean: true})
 
     parsed = Usage::Parser.new(root, meta, %w[-v install --force rack]).parse
 
-    assert_equal [1, 2], parsed.command_keys
+    assert_equal [1, 2], parsed.cmd_keys
     assert parsed.boolean(3)
     assert parsed.boolean(5)
     assert_equal ["rack"], parsed.values[4]
@@ -40,7 +40,7 @@ class ParserTest < Minitest::Test
 
   def test_validation_is_rejected_only_for_a_value
     port = Usage::Argument.new(key: 2, name: "port")
-    root = Usage::Command.new(name: "", key: 1, arguments: [port])
+    root = Usage::Command.new(name: "", key: 1, args: [port])
     meta = metadata(nil, {key: 2, name: "port", validate: "int(value) > 0"})
 
     Usage::Parser.new(root, meta, []).parse
@@ -58,15 +58,15 @@ class ParserTest < Minitest::Test
   def test_arg_required_else_help
     root = Usage::Command.new(name: "ex", key: 1, arg_required_else_help: true)
 
-    error = assert_raises(Usage::Error) { Usage::Parser.new(root, metadata(nil), []).parse }
+    error = assert_raises(Usage::Help) { Usage::Parser.new(root, metadata(nil), []).parse }
     assert_equal "help requested", error.message
   end
 
   def test_subcommand_can_negate_parent_requirements
     required = Usage::Flag.new(key: 2, name: "config", longs: ["config"], takes_value: true)
     child = Usage::Command.new(name: "run", key: 3)
-    root = Usage::Command.new(name: "ex", key: 1, flags: [required], subcommands: [child],
-      subcommand_negates_requirements: true)
+    root = Usage::Command.new(name: "ex", key: 1, flags: [required], cmds: [child],
+      cmd_negates_requirements: true)
     meta = metadata(nil, {key: 2, name: "config", flag: true, required: true}, nil)
 
     Usage::Parser.new(root, meta, ["run"]).parse
@@ -78,8 +78,9 @@ class ParserTest < Minitest::Test
     verbose = Usage::Flag.new(key: 2, name: "verbose", shorts: ["v"])
     root = Usage::Command.new(name: "ex", key: 1, flags: [verbose], version: true)
 
-    {"-h" => "help requested", "-V" => "version requested", "-vh" => "help requested"}.each do |token, message|
-      error = assert_raises(Usage::Error) { Usage::Parser.new(root, metadata(nil, nil), [token]).parse }
+    {"-h" => Usage::Help, "-V" => Usage::Version, "-vh" => Usage::Help}.each do |token, error_class|
+      error = assert_raises(error_class) { Usage::Parser.new(root, metadata(nil, nil), [token]).parse }
+      message = (error_class == Usage::Help) ? "help requested" : "version requested"
       assert_equal message, error.message
     end
   end

@@ -326,7 +326,7 @@ impl<'a> Emitter<'a> {
             }
             if !command.args.is_empty() {
                 fields.push((
-                    "arguments",
+                    "args",
                     multiline_array(
                         &command
                             .args
@@ -341,10 +341,10 @@ impl<'a> Emitter<'a> {
                 let mut clause_fields = vec![
                     ("key", command.named.key.clone()),
                     ("name", ruby_string(&clause.name)),
-                    ("separator", ruby_string(&clause.separator)),
+                    ("sep", ruby_string(&clause.separator)),
                 ];
                 clause_fields.push((
-                    "arguments",
+                    "args",
                     multiline_array(
                         &command
                             .clause_args
@@ -358,7 +358,7 @@ impl<'a> Emitter<'a> {
             }
             if !command.subcommands.is_empty() {
                 fields.push((
-                    "subcommands",
+                    "cmds",
                     format!(
                         "[{}]",
                         command
@@ -375,7 +375,7 @@ impl<'a> Emitter<'a> {
             }
             push_true(
                 &mut fields,
-                "external_subcommand",
+                "external_cmd",
                 command.cmd.external_subcommand,
             );
             push_true(
@@ -390,7 +390,7 @@ impl<'a> Emitter<'a> {
             );
             push_true(
                 &mut fields,
-                "disable_help_subcommand",
+                "disable_help_cmd",
                 command.cmd.disable_help_subcommand,
             );
             push_true(
@@ -400,17 +400,17 @@ impl<'a> Emitter<'a> {
             );
             push_true(
                 &mut fields,
-                "subcommand_negates_requirements",
+                "cmd_negates_requirements",
                 command.cmd.subcommand_negates_reqs,
             );
             push_true(
                 &mut fields,
-                "arguments_conflict_with_subcommands",
+                "args_conflict_with_cmds",
                 command.cmd.args_conflicts_with_subcommands,
             );
             push_true(
                 &mut fields,
-                "subcommand_precedence_over_argument",
+                "cmd_precedence_over_arg",
                 command.cmd.subcommand_precedence_over_arg,
             );
             push_true(
@@ -425,7 +425,7 @@ impl<'a> Emitter<'a> {
             );
             if command.root {
                 if let Some(default) = &default {
-                    fields.push(("default_subcommand", default.clone()));
+                    fields.push(("default_cmd", default.clone()));
                 }
                 push_true(
                     &mut fields,
@@ -543,7 +543,7 @@ impl<'a> Emitter<'a> {
         self.out.push_str("    cmds = { CMD_ROOT => cli }\n");
         if commands.len() > 1 {
             self.out
-                .push_str("\n    parsed.command_keys.drop(1).each do |key|\n      case key\n");
+                .push_str("\n    parsed.cmd_keys.drop(1).each do |key|\n      case key\n");
             for command in commands.iter().skip(1) {
                 let parent = command.parent.unwrap();
                 let parent_key = &commands[parent].named.key;
@@ -616,9 +616,8 @@ impl<'a> Emitter<'a> {
             );
         }
         if commands.iter().any(|entry| entry.cmd.external_subcommand) {
-            self.out.push_str(
-                "\n    unless parsed.external.empty?\n      case parsed.command_keys.last\n",
-            );
+            self.out
+                .push_str("\n    unless parsed.external.empty?\n      case parsed.cmd_keys.last\n");
             for command in commands
                 .iter()
                 .filter(|entry| entry.cmd.external_subcommand)

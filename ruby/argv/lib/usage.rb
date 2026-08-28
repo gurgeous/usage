@@ -1,4 +1,5 @@
 require_relative "usage/version"
 require_relative "usage/error"
 require_relative "usage/tables"
+require_relative "usage/parsed"
 require_relative "usage/parser"

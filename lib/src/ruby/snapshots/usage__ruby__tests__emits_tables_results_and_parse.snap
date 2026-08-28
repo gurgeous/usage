@@ -31,7 +31,7 @@ module Ex
           shorts: ["f"],
         ),
       ],
-      arguments: [
+      args: [
         Usage::Argument.new(
           key: ARG_INSTALL_PKG,
           name: "pkg",
@@ -57,13 +57,13 @@ module Ex
           takes_value: true,
         ),
       ],
-      arguments: [
+      args: [
         Usage::Argument.new(
           key: ARG_FILE,
           name: "file",
         ),
       ],
-      subcommands: [cmd_install],
+      cmds: [cmd_install],
       version: true,
     )
   end
@@ -128,7 +128,7 @@ module Ex
     cli = CLI.new
     cmds = { CMD_ROOT => cli }
 
-    parsed.command_keys.drop(1).each do |key|
+    parsed.cmd_keys.drop(1).each do |key|
       case key
       when CMD_INSTALL
         cmds.fetch(CMD_ROOT).install = cmds[key] = InstallCommand.new

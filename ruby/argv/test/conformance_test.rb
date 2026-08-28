@@ -103,7 +103,7 @@ class ConformanceTest < Minitest::Test
   end
 
   def render(root, metadata, parsed, shape)
-    commands = command_path(root, parsed.command_keys)
+    commands = command_path(root, parsed.cmd_keys)
     shapes = commands.drop(1).each_with_object([shape.fetch("cmd")]) do |command, path|
       path << path.last.fetch("subcommands").fetch(command.name)
     end
@@ -124,7 +124,7 @@ class ConformanceTest < Minitest::Test
           parsed.values[flag.key].last
         end
       end
-      command.arguments.each do |argument|
+      command.args.each do |argument|
         next unless parsed.values.key?(argument.key)
 
         arguments[argument.name] = argument.variadic ? parsed.values[argument.key] : parsed.values[argument.key].last
@@ -132,7 +132,7 @@ class ConformanceTest < Minitest::Test
       next unless command.clause
 
       clauses[command.clause.name] = parsed.clauses.fetch(command.key, []).map do |instance|
-        command.clause.arguments.each_with_object({}) do |argument, values|
+        command.clause.args.each_with_object({}) do |argument, values|
           next unless instance.key?(argument.key)
           values[argument.name] = argument.variadic ? instance[argument.key] : instance[argument.key].last
         end
@@ -146,7 +146,7 @@ class ConformanceTest < Minitest::Test
 
   def command_path(root, keys)
     keys.drop(1).each_with_object([root]) do |key, path|
-      path << path.last.subcommands.find { _1.key == key }
+      path << path.last.cmds.find { _1.key == key }
     end
   end
 
