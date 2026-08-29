@@ -248,6 +248,13 @@ module Usage
       end
 
       def declared_files(name, position)
+        extensions = case name
+        when /\Apath:(.*)\z/, /\Afile:(.*)\z/ then Regexp.last_match(1)
+        end
+        if extensions
+          extensions = extensions.split(",").map { _1.strip.delete_prefix(".") }.reject(&:empty?)
+          return ExtensionFiles.new(extensions) unless extensions.empty?
+        end
         return position.arg_values.to_i.zero? ? :commands : :any if name.casecmp?("command_args")
 
         files_for(name)

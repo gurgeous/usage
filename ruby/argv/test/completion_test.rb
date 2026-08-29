@@ -52,6 +52,19 @@ class CompletionTest < Minitest::Test
     assert_equal :dirs, cli::COMPLETER.answer("ex set --output ").files
   end
 
+  def test_extension_completion_types_preserve_the_filter
+    cli = generate(<<~KDL, "CompletionExtensions")
+      name "ex"
+      bin "ex"
+      arg "<FILE>"
+      complete "file" type="path:toml, .yaml,."
+    KDL
+
+    files = cli::COMPLETER.answer("ex ").files
+    assert_instance_of Usage::Complete::ExtensionFiles, files
+    assert_equal %w[toml yaml], files.extensions
+  end
+
   def test_separator_stops_flag_completion
     cli = generate(<<~KDL, "CompletionSeparator")
       name "ex"

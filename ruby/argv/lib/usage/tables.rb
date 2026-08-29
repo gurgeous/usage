@@ -8,7 +8,8 @@ module Usage
     args_conflict_with_cmds clause cmd_negates_requirements
     cmd_precedence_over_arg cmds default_cmd disable_help_cmd
     disable_help_flag disable_version_flag dont_delimit_trailing_values
-    external_cmd flags key name restart_token unknown_flags version
+    external_cmd flags groups key name restart_token subcommand_required
+    unknown_flags version
   ]) do
     def initialize(key:, name:, **)
       super
@@ -16,9 +17,14 @@ module Usage
       self.args ||= []
       self.cmds ||= []
       self.flags ||= []
+      self.groups ||= []
       self.unknown_flags ||= :value
     end
   end
+
+  # A set of related arguments. By default at most one may be supplied; required
+  # groups also need at least one member.
+  Group = Struct.new(*%i[keys multiple name required selectors])
 
   # A flag declaration: its spellings, whether it takes a value, and how that value
   # may be written. Hidden longs/shorts still parse, they just do not complete.

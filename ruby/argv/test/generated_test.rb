@@ -171,6 +171,24 @@ class GeneratedTest < Minitest::Test
     end
   end
 
+  def test_generated_groups_and_required_subcommands
+    cli = generate(<<~KDL, "GeneratedGroups")
+      name "ex"
+      bin "ex"
+      subcommand_required #true
+      cmd "read" {
+        flag "--file <FILE>"
+        flag "--url <URL>"
+        group "input" "--file" "--url" required=#true
+      }
+    KDL
+
+    assert_equal "a", cli.parse(%w[read --file a]).read.file
+    assert_raises(Usage::Error) { cli.parse([]) }
+    assert_raises(Usage::Error) { cli.parse(["read"]) }
+    assert_raises(Usage::Error) { cli.parse(%w[read --file a --url b]) }
+  end
+
   private
 
   def generate(spec, name)

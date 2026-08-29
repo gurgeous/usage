@@ -86,6 +86,35 @@ class ParserTest < Minitest::Test
     assert_equal "missing required: config", error.message
   end
 
+  def test_argument_groups_enforce_exclusivity_and_requiredness
+    file = Usage::Flag.new(key: 2, name: "file", longs: ["file"], takes_value: true)
+    url = Usage::Flag.new(key: 3, name: "url", longs: ["url"], takes_value: true)
+    group = Usage::Group.new(
+      keys: [2, 3], name: "input", required: true, selectors: %w[--file --url]
+    )
+    root = Usage::Command.new(name: "ex", key: 1, flags: [file, url], groups: [group])
+    meta = metadata(nil,
+      {key: 2, name: "file", flag: true},
+      {key: 3, name: "url", flag: true})
+
+    assert_equal ["a"], Usage::Parser.new(root, meta, %w[--file a]).parse.values[2]
+    missing = assert_raises(Usage::Error) { Usage::Parser.new(root, meta, []).parse }
+    conflict = assert_raises(Usage::Error) do
+      Usage::Parser.new(root, meta, %w[--file a --url b]).parse
+    end
+    assert_equal "missing required group input: --file, --url", missing.message
+    assert_equal "url cannot be given with file", conflict.message
+  end
+
+  def test_required_subcommand
+    child = Usage::Command.new(name: "run", key: 2)
+    root = Usage::Command.new(name: "ex", key: 1, cmds: [child], subcommand_required: true)
+
+    assert_equal [1, 2], Usage::Parser.new(root, metadata(nil, nil), ["run"]).parse.cmd_keys
+    error = assert_raises(Usage::Error) { Usage::Parser.new(root, metadata(nil, nil), []).parse }
+    assert_equal "missing required subcommand", error.message
+  end
+
   def test_short_help_and_version_requests
     verbose = Usage::Flag.new(key: 2, name: "verbose", shorts: ["v"])
     root = Usage::Command.new(name: "ex", key: 1, flags: [verbose], version: true)

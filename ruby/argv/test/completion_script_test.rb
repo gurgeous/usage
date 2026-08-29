@@ -31,14 +31,18 @@ class CompletionScriptTest < Minitest::Test
       assert_includes bash, "$'\\001#{_1}'"
       assert_includes zsh, "$'\\001#{_1}'"
     end
+    assert_includes bash, "$'\\001extensions\\t'"
+    assert_includes zsh, "$'\\001extensions\\t'"
 
     assert_includes script(:fish), "printf '\\x01files'"
+    assert_includes script(:fish), "printf '\\x01extensions'"
     assert_includes script(:fish), 'test -d "$value"; or test -x "$value"'
     assert_includes zsh, "_files -g '*(-/,*)'"
     assert_includes script(:nu), '"\\u{1}"'
     powershell = script(:powershell)
     assert_includes powershell, "[char]1"
     assert_includes powershell, "-CommandType Application, ExternalScript"
+    assert_includes powershell, ".EndsWith('.' + $extension"
     assert_includes powershell, "} elseif ($files) {"
     refute_includes powershell, "} else if ($files) {"
   end

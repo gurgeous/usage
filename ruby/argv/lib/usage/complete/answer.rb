@@ -10,6 +10,7 @@ module Usage
     }
 
     Candidate = Struct.new(*%i[description kind value])
+    ExtensionFiles = Struct.new(:extensions)
 
     Answer = Struct.new(*%i[candidates files]) do
       # Renders candidates for the shell, appending the file-mode marker if any.
@@ -17,7 +18,11 @@ module Usage
         available = candidates.select { travels?(_1.value) }
         described = available.any? { !_1.description.to_s.empty? }
         out = available.map { render_candidate(_1, shell, described) }.join
-        marker = MARKERS[files]
+        marker = if files.is_a?(ExtensionFiles)
+          "\x01extensions\t#{files.extensions.join("\t")}"
+        else
+          MARKERS[files]
+        end
         marker ? "#{out}#{marker}\n" : out
       end
 

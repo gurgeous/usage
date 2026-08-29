@@ -69,6 +69,7 @@ module Usage
       if cmd.arg_required_else_help && cmd_starts[cmd.key] == argv.length
         help!
       end
+      raise Error, "missing required subcommand" if cmd.subcommand_required
       resolve
     end
 
@@ -383,6 +384,7 @@ module Usage
         end
       end
       check_relationships(final, scope, requirements)
+      check_groups(final)
 
       values, occurrences, negated, sources = {}, {}, {}, {}
       scope.each do |key|
@@ -516,6 +518,28 @@ module Usage
         missing!(meta) if meta.fetch(:required_if_eq, []).any?(&matches)
         all = meta.fetch(:required_if_eq_all, [])
         missing!(meta) if !all.empty? && all.all?(&matches)
+      end
+    end
+
+    # Group conflicts are reported before missing groups, matching the ordering of
+    # the other post-binding relationship checks.
+    def check_groups(final)
+      cmd_path.each do |command|
+        command.groups.reject(&:multiple).each do |group|
+          given = group.keys.select { %i[argv env].include?(final[_1]&.dig(:source)) }
+          next if given.length < 2
+
+          raise Error, "#{metadata[given[1]][:name]} cannot be given with #{metadata[given[0]][:name]}"
+        end
+      end
+      cmd_path.each_with_index do |command, index|
+        next if index < cmd_path.length - 1 && command.cmd_negates_requirements
+
+        command.groups.select(&:required).each do |group|
+          next if group.keys.any? { final[_1] && final[_1][:source] != :unset }
+
+          raise Error, "missing required group #{group.name}: #{group.selectors.join(", ")}"
+        end
       end
     end
 

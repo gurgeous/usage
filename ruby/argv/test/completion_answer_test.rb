@@ -22,6 +22,8 @@ class CompletionAnswerTest < Minitest::Test
 
     assert_equal "use\n\x01files\n", answer(candidate, files: :any).render(:bash)
     assert_equal "use\n\x01dirs\n", answer(candidate, files: :dirs).render(:bash)
+    extensions = Usage::Complete::ExtensionFiles.new(%w[toml yaml])
+    assert_equal "use\n\x01extensions\ttoml\tyaml\n", answer(candidate, files: extensions).render(:bash)
     assert_equal "use\n", answer(candidate).render(:bash)
   end
 

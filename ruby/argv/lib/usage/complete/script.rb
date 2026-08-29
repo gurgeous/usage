@@ -7,7 +7,7 @@ module Usage
       # Reads candidates into COMPREPLY, then hands paths to compgen.
       BASH = <<~'BASH'
         _usage_complete_{bin}() {
-            local out line files=
+            local out line files= extensions=
             out="$(command '{bin}' __complete_word__ --shell bash --line "${COMP_LINE:0:$COMP_POINT}" 2>/dev/null)" || return 1
             COMPREPLY=()
             while IFS= read -r line; do
@@ -16,6 +16,7 @@ module Usage
                     $'\001dirs') files=dirs ;;
                     $'\001executables') files=executables ;;
                     $'\001commands') files=commands ;;
+                    $'\001extensions\t'*) files=extensions; extensions="${line#*$'\t'}" ;;
                     '') ;;
                     *) COMPREPLY+=("$line") ;;
                 esac
@@ -30,7 +31,17 @@ module Usage
                     while IFS= read -r path; do paths+=("$path"); done < <(compgen -d -- "$cur")
                 else
                     while IFS= read -r path; do
-                        [[ $files != executables || -d "$path" || -x "$path" ]] && paths+=("$path")
+                        if [[ $files == executables && ! -d "$path" && ! -x "$path" ]]; then
+                            continue
+                        fi
+                        if [[ $files == extensions && ! -d "$path" ]]; then
+                            local extension matched=
+                            while IFS= read -r extension; do
+                                [[ "$path" == *."$extension" ]] && { matched=1; break; }
+                            done < <(tr '\t' '\n' <<< "$extensions")
+                            [[ -n $matched ]] || continue
+                        fi
+                        paths+=("$path")
                     done < <(compgen -f -- "$cur")
                 fi
                 (( ${#paths[@]} )) && COMPREPLY+=("${paths[@]}")
@@ -48,7 +59,9 @@ module Usage
             set -l marker_dirs (printf '\x01dirs')
             set -l marker_executables (printf '\x01executables')
             set -l marker_commands (printf '\x01commands')
+            set -l marker_extensions (printf '\x01extensions')
             set -l files ""
+            set -l extensions
             for entry in $out
                 if test "$entry" = "$marker_any"
                     set files any
@@ -58,6 +71,10 @@ module Usage
                     set files executables
                 else if test "$entry" = "$marker_commands"
                     set files commands
+                else if string match -q "$marker_extensions*" -- "$entry"
+                    set files extensions
+                    set extensions (string split (printf '\t') -- "$entry")
+                    set -e extensions[1]
                 else if test -n "$entry"
                     printf '%s\n' $entry
                 end
@@ -76,6 +93,20 @@ module Usage
                     end
                 case commands
                     __fish_complete_command (commandline -ct)
+                case extensions
+                    for candidate in (__fish_complete_path (commandline -ct))
+                        set -l value (string split -m 1 (printf '\t') -- $candidate)[1]
+                        if test -d "$value"
+                            printf '%s\n' $candidate
+                            continue
+                        end
+                        for extension in $extensions
+                            if string match -q "*.$extension" -- "$value"
+                                printf '%s\n' $candidate
+                                break
+                            end
+                        end
+                    end
             end
         end
         complete -c '{bin}' -f -a '(__usage_complete_{bin})'
@@ -92,7 +123,7 @@ module Usage
             if $out.exit_code != 0 { return null }
             let lines = ($out.stdout | lines | where {|line| $line != "" })
             let marker = "\u{1}"
-            let wants_files = ($lines | any {|line| $line == $marker + "files" or $line == $marker + "dirs" or $line == $marker + "executables" })
+            let wants_files = ($lines | any {|line| $line == $marker + "files" or $line == $marker + "dirs" or $line == $marker + "executables" or ($line | str starts-with ($marker + "extensions" + (char tab))) })
             let wants_commands = ($lines | any {|line| $line == $marker + "commands" })
             let declared = (
                 $lines
@@ -145,6 +176,7 @@ module Usage
             $out = @(& '{bin}' __complete_word__ --shell powershell --line $line 2>$null)
             $marker = [char]1
             $files = $null
+            $extensions = @()
             $results = [System.Collections.Generic.List[System.Management.Automation.CompletionResult]]::new()
             foreach ($entry in $out) {
                 if ([string]::IsNullOrEmpty($entry)) { continue }
@@ -152,6 +184,11 @@ module Usage
                 if ($entry -eq ($marker + 'dirs')) { $files = 'dirs'; continue }
                 if ($entry -eq ($marker + 'executables')) { $files = 'executables'; continue }
                 if ($entry -eq ($marker + 'commands')) { $files = 'commands'; continue }
+                if ($entry.StartsWith($marker + "extensions`t")) {
+                    $files = 'extensions'
+                    $extensions = @($entry -split "`t" | Select-Object -Skip 1 | ForEach-Object { $_.TrimStart('.') })
+                    continue
+                }
                 $parts = $entry -split "`t", 2
                 $value = $parts[0]
                 $description = if ($parts.Count -gt 1 -and $parts[1]) { $parts[1] } else { $value }
@@ -168,6 +205,17 @@ module Usage
                         $candidate = $path.CompletionText.Trim([char[]]@([char]39, [char]34))
                         if (-not (Get-Command -Name $candidate -CommandType Application, ExternalScript -ErrorAction SilentlyContinue)) { continue }
                     }
+                    if ($files -eq 'extensions' -and $path.ResultType -ne 'ProviderContainer') {
+                        $candidate = $path.CompletionText.Trim([char[]]@([char]39, [char]34))
+                        $matches = $false
+                        foreach ($extension in $extensions) {
+                            if ([System.IO.Path]::GetFileName($candidate).EndsWith('.' + $extension, [System.StringComparison]::OrdinalIgnoreCase)) {
+                                $matches = $true
+                                break
+                            }
+                        }
+                        if (-not $matches) { continue }
+                    }
                     $results.Add($path)
                 }
             }
@@ -178,7 +226,7 @@ module Usage
       # Pads descriptions into a column, and forces a menu when any insert was quoted.
       ZSH = <<~'ZSH'
         _{bin}() {
-            local -a values=() descriptions=() inserts=()
+            local -a values=() descriptions=() inserts=() extensions=()
             local files= line menu=0
             while IFS= read -r line; do
                 case "$line" in
@@ -186,6 +234,11 @@ module Usage
                     $'\001dirs') files=dirs; continue ;;
                     $'\001executables') files=executables; continue ;;
                     $'\001commands') files=commands; continue ;;
+                    $'\001extensions\t'*)
+                        files=extensions
+                        extensions=("${(@ps:\t:)${line#*$'\t'}}")
+                        continue
+                        ;;
                     '') continue ;;
                 esac
                 local -a parts=("${(@ps:\t:)line}")
@@ -215,6 +268,10 @@ module Usage
                 dirs) _files -/ && ret=0 ;;
                 executables) _files -g '*(-/,*)' && ret=0 ;;
                 commands) _command_names && ret=0 ;;
+                extensions)
+                    local glob="*.(${(j:|:)extensions})"
+                    _files -g "$glob" && ret=0
+                    ;;
             esac
             return $ret
         }

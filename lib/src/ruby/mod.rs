@@ -352,6 +352,20 @@ impl<'a> Emitter<'a> {
                     ),
                 ));
             }
+            if !command.cmd.groups.is_empty() {
+                fields.push((
+                    "groups",
+                    multiline_array(
+                        &command
+                            .cmd
+                            .groups
+                            .iter()
+                            .map(|group| group_literal(group, command, &commands, 8))
+                            .collect::<Vec<_>>(),
+                        6,
+                    ),
+                ));
+            }
             if let Some(clause) = &command.cmd.clause {
                 let mut clause_fields = vec![
                     ("key", command.named.key.clone()),
@@ -423,6 +437,11 @@ impl<'a> Emitter<'a> {
                 &mut fields,
                 "cmd_precedence_over_arg",
                 command.cmd.subcommand_precedence_over_arg,
+            );
+            push_true(
+                &mut fields,
+                "subcommand_required",
+                command.cmd.subcommand_required,
             );
             push_true(
                 &mut fields,
@@ -1082,6 +1101,23 @@ fn arg_literal(arg: &SpecArg, named: &Named, indent: usize) -> String {
         fields.push(("double_dash", value.into()));
     }
     ruby_call("Usage::Argument", &fields, indent)
+}
+
+fn group_literal(
+    group: &crate::SpecGroup,
+    owner: &Emitted,
+    commands: &[Emitted],
+    indent: usize,
+) -> String {
+    let keys = resolve_relationship(&group.members, owner, commands);
+    let mut fields = vec![
+        ("name", ruby_string(&group.name)),
+        ("keys", format!("[{}]", keys.join(", "))),
+        ("selectors", ruby_array(&group.members)),
+    ];
+    push_true(&mut fields, "required", group.required);
+    push_true(&mut fields, "multiple", group.multiple);
+    ruby_call("Usage::Group", &fields, indent)
 }
 
 fn flag_meta(
