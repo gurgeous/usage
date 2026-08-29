@@ -4,8 +4,9 @@ module Usage
     VERSION_SHORT = Flag.new(key: 0, name: "version", shorts: ["V"], action: :version)
 
     attr_reader(*%i[
-      ancestors argv bound clauses cmd cmd_path cmd_starts default_taken
-      dont_delimit_trailing_values env external metadata sep_seen
+      ancestors arg_filled arg_taken argv awaiting bound clauses cmd cmd_arg_found cmd_path
+      cmd_starts collecting default_taken dont_delimit_trailing_values env
+      external flags_stopped metadata sep_seen
     ])
 
     Bound = Struct.new(:values, :occurrences, :negated, :at) do
@@ -211,6 +212,7 @@ module Usage
       return flag.default_missing if present?(flag.default_missing)
       return nil if flag.value_optional
 
+      @awaiting = flag
       raise Error, "missing value for flag: #{flag.name}"
     end
 
@@ -589,7 +591,11 @@ module Usage
     def missing!(meta) = raise Error, "missing required: #{meta[:name]}"
     def negative_number?(token) = token.match?(/\A-(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?\z/)
     def next_argument = current_arguments[@arg_pos..]&.find { !present?(_1.sigil) }
+    def pending_arg = next_argument
     def present?(value) = !value.nil? && value != ""
+    def subcommands_possible? = !arg_filled && !flags_stopped
     def values_in(value, delimiter) = split_value(value, delimiter).length
+
+    public :pending_arg, :subcommands_possible?
   end
 end

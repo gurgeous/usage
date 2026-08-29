@@ -80,6 +80,28 @@ module Ex
     ],
   )
 
+  COMPLETION = Usage::CompletionMetadata.new(
+    [
+      {
+        key: CMD_ROOT,
+      },
+      {
+        key: CMD_RUN,
+      },
+      {
+        key: FLAG_RUN_NEEDS_TASK,
+      },
+      nil,
+      {
+        key: CMD_EXEC,
+      },
+      {
+        key: CMD_EXEC_NESTED,
+      },
+    ],
+  )
+  COMPLETER = Usage::Completer.new(ROOT, META, COMPLETION)
+
   HELP = Usage::HelpPages.new(
     {
       CMD_ROOT => Usage::HelpPage.new(
@@ -187,6 +209,14 @@ module Ex
   end
 
   class ExecNestedCommand
+  end
+
+  def self.complete(args = ARGV)
+    COMPLETER.respond(args)
+  end
+
+  def self.completion_script(shell)
+    Usage::CompletionScript.new("ex", shell).render
   end
 
   def self.parse(args = ARGV)

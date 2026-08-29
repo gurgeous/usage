@@ -4,7 +4,7 @@ module Usage
     args_conflict_with_cmds clause cmd_negates_requirements
     cmd_precedence_over_arg cmds default_cmd disable_help_cmd
     disable_help_flag disable_version_flag dont_delimit_trailing_values
-    external_cmd flags key name unknown_flags version
+    external_cmd flags key name restart_token unknown_flags version
   ]) do
     def initialize(key:, name:, **)
       super
@@ -48,6 +48,15 @@ module Usage
   end
 
   Metadata = Struct.new(:entries) do
+    def [](key)
+      return if key <= 0
+
+      entry = entries[key - 1]
+      entry if entry && entry[:key] == key
+    end
+  end
+
+  CompletionMetadata = Struct.new(:entries) do
     def [](key)
       return if key <= 0
 

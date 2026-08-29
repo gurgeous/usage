@@ -232,6 +232,7 @@ impl<'a> Emitter<'a> {
         self.constants(&commands);
         self.tables(&commands);
         self.metadata(&commands);
+        self.completion_metadata(&commands);
         #[cfg(feature = "cli-help")]
         self.help_pages(&commands);
         self.result_classes(&commands);
@@ -426,6 +427,9 @@ impl<'a> Emitter<'a> {
                 "dont_delimit_trailing_values",
                 command.cmd.dont_delimit_trailing_values,
             );
+            if let Some(value) = &command.cmd.restart_token {
+                fields.push(("restart_token", ruby_string(value)));
+            }
             if command.root {
                 if let Some(default) = &default {
                     fields.push(("default_cmd", default.clone()));
@@ -450,10 +454,16 @@ impl<'a> Emitter<'a> {
         let mut by_key = BTreeMap::new();
         for command in commands {
             for (flag, named) in &command.flags {
-                by_key.insert(named.number, flag_meta(flag, named, command, commands));
+                by_key.insert(
+                    named.number,
+                    flag_meta(self.spec, flag, named, command, commands),
+                );
             }
             for (arg, named) in command.args.iter().chain(command.clause_args.iter()) {
-                by_key.insert(named.number, arg_meta(arg, named, command, commands));
+                by_key.insert(
+                    named.number,
+                    arg_meta(self.spec, arg, named, command, commands),
+                );
             }
         }
         let _ = writeln!(self.out, "  META = Usage::Metadata.new(\n    [");
@@ -462,6 +472,49 @@ impl<'a> Emitter<'a> {
             let _ = writeln!(self.out, "      {value},");
         }
         self.out.push_str("    ],\n  )\n\n");
+    }
+
+    fn completion_metadata(&mut self, commands: &[Emitted]) {
+        let mut by_key = BTreeMap::new();
+        for command in commands {
+            by_key.insert(
+                command.named.number,
+                completion_meta(
+                    &command.named,
+                    &command.cmd.aliases,
+                    command.cmd.help.as_deref(),
+                    command.cmd.deprecated.as_deref(),
+                    command.cmd.deprecated_warn_at.as_deref(),
+                    command.cmd.deprecated_remove_at.as_deref(),
+                    command.cmd.hide,
+                ),
+            );
+            for (flag, named) in &command.flags {
+                by_key.insert(
+                    named.number,
+                    completion_meta(
+                        named,
+                        &[],
+                        flag.help.as_deref(),
+                        flag.deprecated.as_deref(),
+                        flag.deprecated_warn_at.as_deref(),
+                        flag.deprecated_remove_at.as_deref(),
+                        flag.hide,
+                    ),
+                );
+            }
+        }
+        self.out
+            .push_str("  COMPLETION = Usage::CompletionMetadata.new(\n    [\n");
+        for key in 1..=self.next_key {
+            let value = by_key.get(&key).map(String::as_str).unwrap_or("nil");
+            let _ = writeln!(self.out, "      {value},");
+        }
+        self.out.push_str(concat!(
+            "    ],\n",
+            "  )\n",
+            "  COMPLETER = Usage::Completer.new(ROOT, META, COMPLETION)\n\n",
+        ));
     }
 
     #[cfg(feature = "cli-help")]
@@ -604,6 +657,16 @@ impl<'a> Emitter<'a> {
 
     fn parse(&mut self, commands: &[Emitted]) {
         let root = &commands[0];
+        self.out.push_str(concat!(
+            "  def self.complete(args = ARGV)\n",
+            "    COMPLETER.respond(args)\n",
+            "  end\n\n",
+        ));
+        let _ = writeln!(
+            self.out,
+            "  def self.completion_script(shell)\n    Usage::CompletionScript.new({}, shell).render\n  end\n",
+            ruby_string(&self.spec.bin)
+        );
         if self.spec.multicall {
             self.out
                 .push_str("  def self.parse(args = ARGV, argv0: nil)\n");
@@ -1051,7 +1114,13 @@ fn arg_literal(arg: &SpecArg, named: &Named, indent: usize) -> String {
     ruby_call("Usage::Argument", &fields, indent)
 }
 
-fn flag_meta(flag: &SpecFlag, named: &Named, owner: &Emitted, commands: &[Emitted]) -> String {
+fn flag_meta(
+    spec: &Spec,
+    flag: &SpecFlag,
+    named: &Named,
+    owner: &Emitted,
+    commands: &[Emitted],
+) -> String {
     let mut fields = vec![
         ("key", named.key.clone()),
         ("name", ruby_string(&flag.name)),
@@ -1077,6 +1146,14 @@ fn flag_meta(flag: &SpecFlag, named: &Named, owner: &Emitted, commands: &[Emitte
         if let Some(value) = arg.delimiter {
             fields.push(("delimiter", ruby_string(&value.to_string())));
         }
+    }
+    let value_name = flag
+        .arg
+        .as_ref()
+        .map(|arg| arg.name.as_str())
+        .unwrap_or(flag.name.as_str());
+    if let Some(value) = complete_type(spec, &owner.cmd, value_name) {
+        fields.push(("complete_type", ruby_string(value)));
     }
     push_true(
         &mut fields,
@@ -1184,8 +1261,17 @@ fn flag_meta(flag: &SpecFlag, named: &Named, owner: &Emitted, commands: &[Emitte
     ruby_hash(&fields, 6)
 }
 
-fn arg_meta(arg: &SpecArg, named: &Named, owner: &Emitted, commands: &[Emitted]) -> String {
+fn arg_meta(
+    spec: &Spec,
+    arg: &SpecArg,
+    named: &Named,
+    owner: &Emitted,
+    commands: &[Emitted],
+) -> String {
     let mut fields = vec![("key", named.key.clone()), ("name", ruby_string(&arg.name))];
+    if let Some(value) = complete_type(spec, &owner.cmd, &arg.name) {
+        fields.push(("complete_type", ruby_string(value)));
+    }
     push_true(&mut fields, "required", arg.required);
     push_true(&mut fields, "variadic", arg.var);
     if let Some(value) = arg.delimiter {
@@ -1236,6 +1322,57 @@ fn arg_meta(arg: &SpecArg, named: &Named, owner: &Emitted, commands: &[Emitted])
         commands,
     );
     ruby_hash(&fields, 6)
+}
+
+fn complete_type<'a>(spec: &'a Spec, command: &'a SpecCommand, name: &str) -> Option<&'a str> {
+    spec.complete
+        .get(&name.to_lowercase())
+        .or_else(|| command.complete.get(&name.to_lowercase()))
+        .and_then(|complete| complete.type_.as_deref())
+}
+
+fn completion_meta(
+    named: &Named,
+    aliases: &[String],
+    help: Option<&str>,
+    deprecated: Option<&str>,
+    warn_at: Option<&str>,
+    remove_at: Option<&str>,
+    hidden: bool,
+) -> String {
+    let mut fields = vec![("key", named.key.clone())];
+    push_vec(&mut fields, "aliases", aliases);
+    let description = completion_description(help, deprecated, warn_at, remove_at);
+    if !description.is_empty() {
+        fields.push(("description", ruby_string(&description)));
+    }
+    push_true(&mut fields, "hidden", hidden);
+    ruby_hash(&fields, 6)
+}
+
+fn completion_description(
+    help: Option<&str>,
+    deprecated: Option<&str>,
+    warn_at: Option<&str>,
+    remove_at: Option<&str>,
+) -> String {
+    let mut details = Vec::new();
+    if let Some(value) = deprecated.filter(|value| !value.is_empty()) {
+        details.push(value.to_string());
+    }
+    if let Some(value) = warn_at.filter(|value| !value.is_empty()) {
+        details.push(format!("warn at {value}"));
+    }
+    if let Some(value) = remove_at.filter(|value| !value.is_empty()) {
+        details.push(format!("remove at {value}"));
+    }
+    let deprecated = (!details.is_empty()).then(|| format!("[deprecated: {}]", details.join(", ")));
+    [help, deprecated.as_deref()]
+        .into_iter()
+        .flatten()
+        .filter(|value| !value.trim().is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn push_conditions(

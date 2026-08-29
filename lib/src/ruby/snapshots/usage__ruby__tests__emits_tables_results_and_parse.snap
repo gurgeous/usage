@@ -107,6 +107,30 @@ module Ex
     ],
   )
 
+  COMPLETION = Usage::CompletionMetadata.new(
+    [
+      {
+        key: CMD_ROOT,
+      },
+      {
+        key: FLAG_VERBOSE,
+      },
+      {
+        key: FLAG_JOBS,
+      },
+      nil,
+      {
+        key: CMD_INSTALL,
+        aliases: ["i"],
+      },
+      {
+        key: FLAG_INSTALL_FORCE,
+      },
+      nil,
+    ],
+  )
+  COMPLETER = Usage::Completer.new(ROOT, META, COMPLETION)
+
   HELP = Usage::HelpPages.new(
     {
       CMD_ROOT => Usage::HelpPage.new(
@@ -194,6 +218,14 @@ module Ex
     def initialize
       @force = false
     end
+  end
+
+  def self.complete(args = ARGV)
+    COMPLETER.respond(args)
+  end
+
+  def self.completion_script(shell)
+    Usage::CompletionScript.new("ex", shell).render
   end
 
   def self.parse(args = ARGV)
