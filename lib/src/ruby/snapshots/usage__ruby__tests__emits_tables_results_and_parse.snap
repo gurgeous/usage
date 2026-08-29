@@ -131,78 +131,44 @@ module Ex
   )
   COMPLETER = Usage::Complete::Engine.new(ROOT, META, COMPLETION)
 
-  HELP = Usage::HelpPages.new(
-    {
-      CMD_ROOT => Usage::HelpPage.new(
-        children: [CMD_INSTALL],
-        long: <<~USAGE_HELP_1_LONG,
-          ex 1.2.3
-          Usage: ex [-v --verbose] [--jobs <n>] [file] <SUBCOMMAND>
-
-          Commands:
-            install  [aliases: i]
-            help     Print this message or the help of the given subcommand(s)
-
-          Arguments:
-            [file]
-
-          Flags:
-            -v, --verbose
-                --jobs <n>
-                            [env: JOBS]
-                            (default: 2)
-            -h, --help      Print help
-            -V, --version   Print version
-        USAGE_HELP_1_LONG
-        short: <<~USAGE_HELP_1_SHORT
-          ex 1.2.3
-          Usage: ex [-v --verbose] [--jobs <n>] [file] <SUBCOMMAND>
-
-          Commands:
-            install  [aliases: i]
-            help     Print this message or the help of the given subcommand(s)
-
-          Arguments:
-            [file]
-
-          Flags:
-            -v, --verbose
-                --jobs <n>  [env: JOBS] (default: 2)
-            -h, --help      Print help
-            -V, --version   Print version
-        USAGE_HELP_1_SHORT
-      ),
-      CMD_INSTALL => Usage::HelpPage.new(
-        children: [],
-        long: <<~USAGE_HELP_5_LONG,
-          Usage: ex install [-f --force] <pkg>
-
-          Arguments:
-            <pkg>
-
-          Flags:
-            -f, --force
-            -h, --help     Print help
-
-          Global flags:
-            -v, --verbose
-        USAGE_HELP_5_LONG
-        short: <<~USAGE_HELP_5_SHORT
-          Usage: ex install [-f --force] <pkg>
-
-          Arguments:
-            <pkg>
-
-          Flags:
-            -f, --force
-            -h, --help     Print help
-
-          Global flags:
-            -v, --verbose
-        USAGE_HELP_5_SHORT
-      )
-    }
+  HELP_SPEC = Usage::HelpSpec.new(
+    name: "ex",
+    bin: "ex",
+    version: "1.2.3"
   )
+
+  HELP_META = Usage::HelpMetadata.new(
+    [
+      {
+        key: CMD_ROOT
+      },
+      {
+        key: FLAG_VERBOSE
+      },
+      {
+        key: FLAG_JOBS,
+        value_name: "n",
+        value_demanded: true,
+        env: "JOBS",
+        default: ["2"]
+      },
+      {
+        key: ARG_FILE
+      },
+      {
+        key: CMD_INSTALL,
+        visible_aliases: ["i"]
+      },
+      {
+        key: FLAG_INSTALL_FORCE
+      },
+      {
+        key: ARG_INSTALL_PKG,
+        demanded: true
+      }
+    ]
+  )
+  HELP = Usage::HelpPages.new(ROOT, HELP_SPEC, HELP_META)
 
   class CLI
     attr_accessor :verbose, :jobs, :file, :install

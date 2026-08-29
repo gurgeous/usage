@@ -9,23 +9,27 @@ class TablesTest < Minitest::Test
   end
 
   def test_help_pages_render_short_long_and_recursive_help
-    pages = Usage::HelpPages.new(
-      {
-        1 => Usage::HelpPage.new(children: [3, 2], long: "root long\n", short: "root short\n"),
-        2 => Usage::HelpPage.new(children: [], long: "second long\n", short: "second short\n"),
-        3 => Usage::HelpPage.new(children: [], long: "first long\n", short: "first short\n")
-      }
-    )
+    first = Usage::Command.new(key: 3, name: "first")
+    second = Usage::Command.new(key: 2, name: "second")
+    root = Usage::Command.new(key: 1, name: "ex", cmds: [second, first])
+    spec = Usage::HelpSpec.new(bin: "ex", name: "ex", about: "root help")
+    meta = Usage::HelpMetadata.new([
+      {key: 1},
+      {key: 2, short: "second help"},
+      {key: 3, short: "first help", display_order: 1, display_order_set: true}
+    ])
+    pages = Usage::HelpPages.new(root, spec, meta)
 
     short = Usage::Help.new("help requested").tap { _1.all, _1.cmd_key, _1.long = false, 1, false }
     all = Usage::Help.new("help requested").tap { _1.all, _1.cmd_key, _1.long = true, 1, true }
 
-    assert_equal "root short\n", pages.render(short)
-    assert_equal "root long\n\nfirst long\n\nsecond long\n", pages.render(all)
+    assert_includes pages.render(short), "root help"
+    rendered = pages.render(all)
+    assert_operator rendered.index("Usage: ex first"), :<, rendered.index("Usage: ex second")
   end
 
   def test_metadata_lookup_requires_a_dense_matching_key
-    [Usage::Metadata, Usage::CompletionMetadata].each do |type|
+    [Usage::Metadata, Usage::CompletionMetadata, Usage::HelpMetadata].each do |type|
       table = type.new([{key: 1, name: "a"}, {key: 2, name: "b"}, {key: 3, name: "c"}])
       assert_equal "b", table[2][:name]
       assert_nil table[0]

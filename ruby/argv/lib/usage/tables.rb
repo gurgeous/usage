@@ -78,26 +78,19 @@ module Usage
     end
   end
 
-  # Help text rendered at generation time. `children` are the keys under this page,
-  # for --help-all.
-  HelpPage = Struct.new(*%i[children long short])
+  # Root fields used by every help page.
+  HelpSpec = Struct.new(*%i[
+    about after_help after_long_help author before_help before_long_help bin
+    help_template license long_about name version
+  ])
 
-  HelpPages = Struct.new(:entries) do
-    def fetch(key, long:)
-      page = entries.fetch(key)
-      long ? page.long : page.short
-    end
+  # Semantic help metadata, keyed like the parse and binding tables.
+  HelpMetadata = Struct.new(:entries) do
+    def [](key)
+      return unless key&.positive?
 
-    def render(error)
-      return fetch(error.cmd_key, long: error.long) unless error.all
-
-      render_all(error.cmd_key)
-    end
-
-    # A page followed by every descendant page, for --help-all.
-    def render_all(key)
-      page = entries.fetch(key)
-      ([page.long] + page.children.map { render_all(_1) }).join("\n")
+      entry = entries[key - 1]
+      entry if entry && entry[:key] == key
     end
   end
 end

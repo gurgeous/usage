@@ -102,90 +102,35 @@ module Ex
   )
   COMPLETER = Usage::Complete::Engine.new(ROOT, META, COMPLETION)
 
-  HELP = Usage::HelpPages.new(
-    {
-      CMD_ROOT => Usage::HelpPage.new(
-        children: [CMD_EXEC, CMD_RUN],
-        long: <<~USAGE_HELP_1_LONG,
-          Usage: ex <SUBCOMMAND>
-
-          Commands:
-            exec
-            run
-            help  Print this message or the help of the given subcommand(s)
-
-          Flags:
-            -h, --help  Print help
-        USAGE_HELP_1_LONG
-        short: <<~USAGE_HELP_1_SHORT
-          Usage: ex <SUBCOMMAND>
-
-          Commands:
-            exec
-            run
-            help  Print this message or the help of the given subcommand(s)
-
-          Flags:
-            -h, --help  Print help
-        USAGE_HELP_1_SHORT
-      ),
-      CMD_RUN => Usage::HelpPage.new(
-        children: [],
-        long: <<~USAGE_HELP_2_LONG,
-          Usage: ex run [--needs-task] <task> [::: <task>]…
-
-          Flags:
-                --needs-task
-            -h, --help        Print help
-        USAGE_HELP_2_LONG
-        short: <<~USAGE_HELP_2_SHORT
-          Usage: ex run [--needs-task] <task> [::: <task>]…
-
-          Flags:
-                --needs-task
-            -h, --help        Print help
-        USAGE_HELP_2_SHORT
-      ),
-      CMD_EXEC => Usage::HelpPage.new(
-        children: [CMD_EXEC_NESTED],
-        long: <<~USAGE_HELP_5_LONG,
-          Usage: ex exec <SUBCOMMAND>
-
-          Commands:
-            nested
-            help    Print this message or the help of the given subcommand(s)
-
-          Flags:
-            -h, --help  Print help
-        USAGE_HELP_5_LONG
-        short: <<~USAGE_HELP_5_SHORT
-          Usage: ex exec <SUBCOMMAND>
-
-          Commands:
-            nested
-            help    Print this message or the help of the given subcommand(s)
-
-          Flags:
-            -h, --help  Print help
-        USAGE_HELP_5_SHORT
-      ),
-      CMD_EXEC_NESTED => Usage::HelpPage.new(
-        children: [],
-        long: <<~USAGE_HELP_6_LONG,
-          Usage: ex exec nested
-
-          Flags:
-            -h, --help  Print help
-        USAGE_HELP_6_LONG
-        short: <<~USAGE_HELP_6_SHORT
-          Usage: ex exec nested
-
-          Flags:
-            -h, --help  Print help
-        USAGE_HELP_6_SHORT
-      )
-    }
+  HELP_SPEC = Usage::HelpSpec.new(
+    name: "ex",
+    bin: "ex"
   )
+
+  HELP_META = Usage::HelpMetadata.new(
+    [
+      {
+        key: CMD_ROOT
+      },
+      {
+        key: CMD_RUN
+      },
+      {
+        key: FLAG_RUN_NEEDS_TASK
+      },
+      {
+        key: ARG_RUN_ITEMS_TASK,
+        demanded: true
+      },
+      {
+        key: CMD_EXEC
+      },
+      {
+        key: CMD_EXEC_NESTED
+      }
+    ]
+  )
+  HELP = Usage::HelpPages.new(ROOT, HELP_SPEC, HELP_META)
 
   class CLI
     attr_accessor :run, :exec

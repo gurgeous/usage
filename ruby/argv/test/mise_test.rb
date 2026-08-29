@@ -77,9 +77,10 @@ class MiseTest < Minitest::Test
         differences << "#{key.inspect}: no reference page"
         next
       end
-      page = mise::HELP.entries.fetch(cmd.key)
-      differences << "#{key.inspect}: short page differs" unless page.short == expected.fetch("short")
-      differences << "#{key.inspect}: long page differs" unless page.long == expected.fetch("long")
+      short = mise::HELP.fetch(cmd.key, long: false)
+      long = mise::HELP.fetch(cmd.key, long: true)
+      differences << "#{key.inspect}: short page differs" unless short == expected.fetch("short")
+      differences << "#{key.inspect}: long page differs" unless long == expected.fetch("long")
       checked += 1
     end
 

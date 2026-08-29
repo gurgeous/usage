@@ -12,7 +12,7 @@ Gem::Specification.new do |s|
   s.metadata = {
     "homepage_uri" => s.homepage,
     "rubygems_mfa_required" => "true",
-    "source_code_uri" => s.homepage,
+    "source_code_uri" => s.homepage
   }
 
   # what's in the gem?

@@ -241,7 +241,7 @@ impl<'a> Emitter<'a> {
         self.metadata(&commands);
         self.completion_metadata(&commands);
         #[cfg(feature = "cli-help")]
-        self.help_pages(&commands);
+        self.help_metadata(&commands);
         self.result_classes(&commands);
         self.parse(&commands);
         let end = self.out.trim_end().len();
@@ -397,12 +397,12 @@ impl<'a> Emitter<'a> {
             push_true(
                 &mut fields,
                 "disable_help_flag",
-                command.cmd.disable_help_flag,
+                command.cmd.disable_help_flag || self.spec.disable_help == Some(true),
             );
             push_true(
                 &mut fields,
                 "disable_help_cmd",
-                command.cmd.disable_help_subcommand,
+                command.cmd.disable_help_subcommand || self.spec.disable_help == Some(true),
             );
             push_true(
                 &mut fields,
@@ -527,81 +527,67 @@ impl<'a> Emitter<'a> {
     }
 
     #[cfg(feature = "cli-help")]
-    fn help_pages(&mut self, commands: &[Emitted]) {
-        let workers = std::thread::available_parallelism()
-            .map(usize::from)
-            .unwrap_or(1)
-            .min(8);
-        let chunk_size = commands.len().div_ceil(workers);
-        let pages = std::thread::scope(|scope| {
-            let handles = commands
-                .chunks(chunk_size)
-                .map(|chunk| {
-                    scope.spawn(|| {
-                        chunk
-                            .iter()
-                            .map(|command| {
-                                (
-                                    render_help(self.spec, &command.cmd, true),
-                                    render_help(self.spec, &command.cmd, false),
-                                )
-                            })
-                            .collect::<Vec<_>>()
-                    })
-                })
-                .collect::<Vec<_>>();
-            handles
-                .into_iter()
-                .flat_map(|handle| handle.join().unwrap())
-                .collect::<Vec<_>>()
-        });
-        self.out.push_str("  HELP = Usage::HelpPages.new(\n    {\n");
-        for (index, (command, (long, short))) in commands.iter().zip(pages).enumerate() {
-            let mut children = command
-                .subcommands
-                .iter()
-                .map(|at| &commands[*at])
-                .filter(|child| !child.cmd.hide)
-                .collect::<Vec<_>>();
-            children.sort_by_key(|child| {
-                (
-                    child.cmd.display_order.unwrap_or(999),
-                    child.cmd.name.as_str(),
-                )
-            });
-            let children = format!(
-                "[{}]",
-                children
-                    .iter()
-                    .map(|child| child.named.key.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            );
-            let _ = writeln!(
-                self.out,
-                "      {} => Usage::HelpPage.new(\n        children: {children},",
-                command.named.key
-            );
-            ruby_heredoc(
-                &mut self.out,
-                "long",
-                &long,
-                &format!("USAGE_HELP_{}_LONG", command.named.number),
-                8,
-                true,
-            );
-            ruby_heredoc(
-                &mut self.out,
-                "short",
-                &short,
-                &format!("USAGE_HELP_{}_SHORT", command.named.number),
-                8,
-                false,
-            );
-            let comma = if index + 1 == commands.len() { "" } else { "," };
-            let _ = writeln!(self.out, "      ){comma}");
+    fn help_metadata(&mut self, commands: &[Emitted]) {
+        let mut by_key = BTreeMap::new();
+        for command in commands {
+            by_key.insert(command.named.number, command_help(command));
+            for (flag, named) in &command.flags {
+                by_key.insert(named.number, flag_help(flag, named));
+            }
+            for (arg, named) in command.args.iter().chain(command.clause_args.iter()) {
+                by_key.insert(named.number, arg_help(arg, named));
+            }
         }
-        self.out.push_str("    }\n  )\n\n");
+
+        // File loading infers both fields from a bare `.usage.kdl` filename, while
+        // help rendered from the source text leaves the program prefix empty.
+        let inferred_name =
+            self.spec.name == self.spec.bin && self.spec.bin.ends_with(".usage.kdl");
+        let name = (!inferred_name)
+            .then_some(self.spec.name.as_str())
+            .unwrap_or_default();
+        let bin = (!inferred_name)
+            .then_some(self.spec.bin.as_str())
+            .unwrap_or_default();
+        let mut spec = vec![("name", ruby_string(name)), ("bin", ruby_string(bin))];
+        push_option(&mut spec, "version", self.spec.version.as_deref());
+        push_option(&mut spec, "about", self.spec.about.as_deref());
+        push_option(&mut spec, "long_about", self.spec.about_long.as_deref());
+        push_option(&mut spec, "author", self.spec.author.as_deref());
+        push_option(&mut spec, "license", self.spec.license.as_deref());
+        push_option(&mut spec, "before_help", self.spec.before_help.as_deref());
+        push_option(&mut spec, "after_help", self.spec.after_help.as_deref());
+        push_option(
+            &mut spec,
+            "before_long_help",
+            self.spec.before_help_long.as_deref(),
+        );
+        push_option(
+            &mut spec,
+            "after_long_help",
+            self.spec.after_help_long.as_deref(),
+        );
+        push_option(
+            &mut spec,
+            "help_template",
+            self.spec.help_template.as_deref(),
+        );
+        let _ = writeln!(
+            self.out,
+            "  HELP_SPEC = {}\n",
+            ruby_call("Usage::HelpSpec", &spec, 2)
+        );
+
+        self.out
+            .push_str("  HELP_META = Usage::HelpMetadata.new(\n    [\n");
+        for key in 1..=self.next_key {
+            let value = by_key.get(&key).map(String::as_str).unwrap_or("nil");
+            let comma = if key == self.next_key { "" } else { "," };
+            let _ = writeln!(self.out, "      {value}{comma}");
+        }
+        self.out.push_str("    ]\n  )\n");
+        self.out
+            .push_str("  HELP = Usage::HelpPages.new(ROOT, HELP_SPEC, HELP_META)\n\n");
     }
 
     fn result_classes(&mut self, commands: &[Emitted]) {
@@ -968,6 +954,13 @@ fn push_true(fields: &mut Vec<(&'static str, String)>, key: &'static str, value:
 fn push_vec(fields: &mut Vec<(&'static str, String)>, key: &'static str, values: &[String]) {
     if !values.is_empty() {
         fields.push((key, ruby_array(values)));
+    }
+}
+
+#[cfg(feature = "cli-help")]
+fn push_option(fields: &mut Vec<(&'static str, String)>, key: &'static str, value: Option<&str>) {
+    if let Some(value) = value {
+        fields.push((key, ruby_string(value)));
     }
 }
 
@@ -1419,6 +1412,234 @@ fn accepted_choices(choices: &SpecChoices) -> Vec<String> {
         .collect()
 }
 
+#[cfg(feature = "cli-help")]
+fn command_help(command: &Emitted) -> String {
+    let mut fields = vec![("key", command.named.key.clone())];
+    push_true(&mut fields, "hide", command.cmd.hide);
+    push_option(&mut fields, "heading", command.cmd.help_heading.as_deref());
+    if let Some(order) = command.cmd.display_order {
+        fields.push(("display_order", order.to_string()));
+        fields.push(("display_order_set", "true".into()));
+    }
+    push_option(&mut fields, "short", command.cmd.help.as_deref());
+    push_option(&mut fields, "long", command.cmd.help_long.as_deref());
+    push_option(&mut fields, "deprecated", command.cmd.deprecated.as_deref());
+    push_option(
+        &mut fields,
+        "deprecated_warn_at",
+        command.cmd.deprecated_warn_at.as_deref(),
+    );
+    push_option(
+        &mut fields,
+        "deprecated_remove_at",
+        command.cmd.deprecated_remove_at.as_deref(),
+    );
+    push_option(
+        &mut fields,
+        "subcommand_help_heading",
+        command.cmd.subcommand_help_heading.as_deref(),
+    );
+    push_option(
+        &mut fields,
+        "subcommand_value_name",
+        command.cmd.subcommand_value_name.as_deref(),
+    );
+    push_true(&mut fields, "next_line_help", command.cmd.next_line_help);
+    push_true(&mut fields, "flatten_help", command.cmd.flatten_help);
+    if let Some(width) = command.cmd.term_width {
+        fields.push(("term_width", width.to_string()));
+    }
+    if let Some(width) = command.cmd.max_term_width {
+        fields.push(("max_term_width", width.to_string()));
+    }
+    push_true(
+        &mut fields,
+        "subcommand_required",
+        command.cmd.subcommand_required,
+    );
+    let aliases = command
+        .cmd
+        .aliases
+        .iter()
+        .filter(|alias| !command.cmd.hidden_aliases.contains(alias))
+        .cloned()
+        .collect::<Vec<_>>();
+    push_vec(&mut fields, "visible_aliases", &aliases);
+    push_option(
+        &mut fields,
+        "before_help",
+        command.cmd.before_help.as_deref(),
+    );
+    push_option(&mut fields, "after_help", command.cmd.after_help.as_deref());
+    push_option(
+        &mut fields,
+        "before_long_help",
+        command.cmd.before_help_long.as_deref(),
+    );
+    push_option(
+        &mut fields,
+        "after_long_help",
+        command.cmd.after_help_long.as_deref(),
+    );
+    if !command.cmd.examples.is_empty() {
+        let examples = command
+            .cmd
+            .examples
+            .iter()
+            .map(|example| {
+                let mut item = vec![("code", ruby_string(&example.code))];
+                push_option(&mut item, "header", example.header.as_deref());
+                push_option(&mut item, "help", example.help.as_deref());
+                ruby_hash(&item, 10)
+            })
+            .collect::<Vec<_>>();
+        fields.push(("examples", multiline_array(&examples, 8)));
+    }
+    if !command.cmd.headings.is_empty() {
+        let headings = command
+            .cmd
+            .headings
+            .iter()
+            .map(|heading| {
+                ruby_hash(
+                    &[
+                        ("title", ruby_string(&heading.title)),
+                        ("help", ruby_string(&heading.help)),
+                    ],
+                    10,
+                )
+            })
+            .collect::<Vec<_>>();
+        fields.push(("headings", multiline_array(&headings, 8)));
+    }
+    ruby_hash(&fields, 6)
+}
+
+#[cfg(feature = "cli-help")]
+fn flag_help(flag: &SpecFlag, named: &Named) -> String {
+    let mut fields = vec![("key", named.key.clone())];
+    push_option(&mut fields, "deprecated", flag.deprecated.as_deref());
+    push_option(
+        &mut fields,
+        "deprecated_warn_at",
+        flag.deprecated_warn_at.as_deref(),
+    );
+    push_option(
+        &mut fields,
+        "deprecated_remove_at",
+        flag.deprecated_remove_at.as_deref(),
+    );
+    push_true(&mut fields, "hide", flag.hide);
+    if let Some(order) = flag.display_order {
+        fields.push(("display_order", order.to_string()));
+        fields.push(("display_order_set", "true".into()));
+    }
+    for (name, hidden) in [
+        ("hide_default_value", flag.hide_default_value),
+        ("hide_env", flag.hide_env),
+        ("hide_env_values", flag.hide_env_values),
+        ("hide_possible_values", flag.hide_possible_values),
+        ("hide_short_help", flag.hide_short_help),
+        ("hide_long_help", flag.hide_long_help),
+    ] {
+        push_true(&mut fields, name, hidden);
+    }
+    push_true(
+        &mut fields,
+        "demanded",
+        flag.required && flag.default.is_empty(),
+    );
+    push_true(&mut fields, "repeatable", flag.var);
+    if let Some(arg) = &flag.arg {
+        if arg.name != flag.name {
+            fields.push(("value_name", ruby_string(&arg.name)));
+        }
+        push_true(
+            &mut fields,
+            "value_demanded",
+            arg.required && arg.default.is_empty(),
+        );
+        push_vec(&mut fields, "value_names", &arg.value_names);
+        if arg.var && arg.var_min == arg.var_max && arg.var_min.is_some_and(|n| n > 1) {
+            fields.push(("value_arity", arg.var_min.unwrap().to_string()));
+        }
+    }
+    push_option(
+        &mut fields,
+        "short",
+        flag.help.as_deref().or(flag.help_first_line.as_deref()),
+    );
+    push_option(
+        &mut fields,
+        "long",
+        flag.help_long.as_deref().or(flag.help.as_deref()),
+    );
+    push_option(&mut fields, "heading", flag.help_heading.as_deref());
+    if let Some(choices) = flag.arg.as_ref().and_then(|arg| arg.choices.as_ref()) {
+        push_vec(&mut fields, "choices", &visible_choices(choices));
+    }
+    push_option(&mut fields, "env", flag.env.as_deref());
+    push_vec(&mut fields, "env_fallback", &flag.env_fallback);
+    push_vec(&mut fields, "deprecated_env", &flag.deprecated_env);
+    let default = if flag.default.is_empty() {
+        flag.arg.as_ref().map(|arg| &arg.default)
+    } else {
+        Some(&flag.default)
+    };
+    if let Some(default) = default {
+        push_vec(&mut fields, "default", default);
+    }
+    ruby_hash(&fields, 6)
+}
+
+#[cfg(feature = "cli-help")]
+fn arg_help(arg: &SpecArg, named: &Named) -> String {
+    let mut fields = vec![("key", named.key.clone())];
+    if let Some(order) = arg.display_order {
+        fields.push(("display_order", order.to_string()));
+        fields.push(("display_order_set", "true".into()));
+    }
+    push_true(&mut fields, "hide", arg.hide);
+    for (name, hidden) in [
+        ("hide_default_value", arg.hide_default_value),
+        ("hide_env", arg.hide_env),
+        ("hide_env_values", arg.hide_env_values),
+        ("hide_possible_values", arg.hide_possible_values),
+        ("hide_short_help", arg.hide_short_help),
+        ("hide_long_help", arg.hide_long_help),
+    ] {
+        push_true(&mut fields, name, hidden);
+    }
+    push_true(
+        &mut fields,
+        "demanded",
+        arg.required && arg.default.is_empty(),
+    );
+    push_vec(&mut fields, "value_names", &arg.value_names);
+    if arg.var && arg.var_min == arg.var_max && arg.var_min.is_some_and(|n| n > 1) {
+        fields.push(("value_arity", arg.var_min.unwrap().to_string()));
+    }
+    push_option(
+        &mut fields,
+        "short",
+        arg.help.as_deref().or(arg.help_first_line.as_deref()),
+    );
+    push_option(
+        &mut fields,
+        "long",
+        arg.help_long.as_deref().or(arg.help.as_deref()),
+    );
+    push_option(&mut fields, "heading", arg.help_heading.as_deref());
+    if let Some(choices) = &arg.choices {
+        push_vec(&mut fields, "choices", &visible_choices(choices));
+    }
+    push_option(&mut fields, "env", arg.env.as_deref());
+    push_vec(&mut fields, "env_fallback", &arg.env_fallback);
+    push_vec(&mut fields, "deprecated_env", &arg.deprecated_env);
+    push_vec(&mut fields, "default", &arg.default);
+    ruby_hash(&fields, 6)
+}
+
 fn resolve_relationship(names: &[String], owner: &Emitted, commands: &[Emitted]) -> Vec<String> {
     names
         .iter()
@@ -1607,62 +1828,6 @@ fn ruby_string(value: &str) -> String {
     }
     out.push('\"');
     out
-}
-
-#[cfg(feature = "cli-help")]
-fn ruby_heredoc(
-    out: &mut String,
-    field: &str,
-    value: &str,
-    base: &str,
-    indent: usize,
-    comma: bool,
-) {
-    let comma = if comma { "," } else { "" };
-    if !value.ends_with('\n')
-        || value
-            .chars()
-            .any(|value| value.is_control() && !matches!(value, '\n' | '\t'))
-        || value
-            .lines()
-            .any(|line| !line.is_empty() && line.trim().is_empty())
-    {
-        let _ = writeln!(
-            out,
-            "{}{field}: {}{comma}",
-            " ".repeat(indent),
-            ruby_string(value)
-        );
-        return;
-    }
-    let mut marker = base.to_string();
-    let mut suffix = 1;
-    while value.lines().any(|line| line.trim_start() == marker) {
-        suffix += 1;
-        marker = format!("{base}_{suffix}");
-    }
-    let spaces = " ".repeat(indent);
-    let content_spaces = " ".repeat(indent + 2);
-    let _ = writeln!(out, "{spaces}{field}: <<~{marker}{comma}");
-    for line in value.split_inclusive('\n') {
-        if line != "\n" {
-            out.push_str(&content_spaces);
-        }
-        out.push_str(line);
-    }
-    let _ = writeln!(out, "{spaces}{marker}");
-}
-
-#[cfg(feature = "cli-help")]
-fn render_help(spec: &Spec, cmd: &SpecCommand, long: bool) -> String {
-    let mut cmd = cmd.clone();
-    if cmd.term_width.is_none() {
-        cmd.term_width = Some(match cmd.max_term_width {
-            Some(max) if max > 0 => max.min(80),
-            _ => 80,
-        });
-    }
-    crate::docs::cli::render_help(spec, &cmd, long)
 }
 
 fn clamp(value: usize) -> u32 {
@@ -2151,5 +2316,132 @@ mod tests {
         assert!(completion.contains("hidden: true"), "{out}");
         assert!(out.contains("def self.complete(args = ARGV)"), "{out}");
         assert!(out.contains("def self.completion_script(shell)"), "{out}");
+    }
+
+    #[test]
+    fn help_text_reaches_generated_ruby() {
+        let out = ruby(
+            r#"
+            name "ex"
+            bin "ex"
+            about "Short."
+            about_long "Long."
+            before_long_help "ROOT-BEFORE"
+            after_long_help "ROOT-AFTER"
+            cmd "run" help="Run it" {
+                before_long_help "RUN-BEFORE"
+                after_long_help "RUN-AFTER"
+            }
+        "#,
+        );
+
+        for field in [
+            "about: \"Short.\"",
+            "long_about: \"Long.\"",
+            "before_long_help: \"ROOT-BEFORE\"",
+            "after_long_help: \"ROOT-AFTER\"",
+            "before_long_help: \"RUN-BEFORE\"",
+            "after_long_help: \"RUN-AFTER\"",
+        ] {
+            assert!(out.contains(field), "missing {field}:\n{out}");
+        }
+    }
+
+    #[test]
+    fn help_controls_reach_generated_ruby() {
+        let out = ruby(
+            r#"
+            name "ex"
+            bin "ex"
+            long_version "1.2.3\ncommit abc123"
+            disable_help #true
+            term_width 40
+            max_term_width 60
+            cmd "run" {
+                long_help "Only on the long page."
+            }
+        "#,
+        );
+
+        let root = out
+            .split("ROOT = begin")
+            .nth(1)
+            .unwrap()
+            .split("META =")
+            .next()
+            .unwrap();
+        assert_eq!(root.matches("disable_help_flag: true").count(), 2, "{out}");
+        assert_eq!(root.matches("disable_help_cmd: true").count(), 2, "{out}");
+
+        let help_spec = out
+            .split("HELP_SPEC =")
+            .nth(1)
+            .unwrap()
+            .split("HELP_META =")
+            .next()
+            .unwrap();
+        assert!(!help_spec.contains("version:"), "{out}");
+        assert!(out.contains("term_width: 40"), "{out}");
+        assert!(out.contains("max_term_width: 60"), "{out}");
+
+        let run = out
+            .split("HELP_META =")
+            .nth(1)
+            .unwrap()
+            .split("key: CMD_RUN")
+            .nth(1)
+            .unwrap();
+        assert!(run.contains("long: \"Only on the long page.\""), "{out}");
+        assert!(!run.contains("short:"), "{out}");
+    }
+
+    #[test]
+    fn inferred_filename_stays_out_of_help() {
+        let mut spec: Spec = "cmd \"run\"\n".parse().unwrap();
+        spec.name = "fixture.usage.kdl".into();
+        spec.bin = "fixture.usage.kdl".into();
+        let out = generate(
+            &spec,
+            &RubyOptions {
+                module: Some("Fixture".into()),
+            },
+        );
+        let help_spec = out
+            .split("HELP_SPEC =")
+            .nth(1)
+            .unwrap()
+            .split("HELP_META =")
+            .next()
+            .unwrap();
+
+        assert!(help_spec.contains("name: \"\""), "{out}");
+        assert!(help_spec.contains("bin: \"\""), "{out}");
+    }
+
+    #[test]
+    fn examples_and_heading_prose_reach_generated_ruby() {
+        let out = ruby(
+            r#"
+            name "ex"
+            bin "ex"
+            cmd "run" help="Run it" {
+                heading "Filters" help="Filters accumulate from left to right."
+                flag "--allow <NAME>" help="Allow it" help_heading="Filters"
+                example "ex run --fast" header="Speed" help="When you are in a hurry"
+                example "ex run"
+            }
+        "#,
+        );
+
+        for field in [
+            "code: \"ex run --fast\"",
+            "header: \"Speed\"",
+            "help: \"When you are in a hurry\"",
+            "code: \"ex run\"",
+            "title: \"Filters\"",
+            "help: \"Filters accumulate from left to right.\"",
+        ] {
+            assert!(out.contains(field), "missing {field}:\n{out}");
+        }
     }
 }
