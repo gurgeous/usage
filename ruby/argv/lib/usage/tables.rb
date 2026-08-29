@@ -55,4 +55,24 @@ module Usage
       entry if entry && entry[:key] == key
     end
   end
+
+  HelpPage = Struct.new(*%i[children long short])
+
+  HelpPages = Struct.new(:entries) do
+    def fetch(key, long:)
+      page = entries.fetch(key)
+      long ? page.long : page.short
+    end
+
+    def render(error)
+      return fetch(error.cmd_key, long: error.long) unless error.all
+
+      render_all(error.cmd_key)
+    end
+
+    def render_all(key)
+      page = entries.fetch(key)
+      ([page.long] + page.children.map { render_all(_1) }).join("\n")
+    end
+  end
 end

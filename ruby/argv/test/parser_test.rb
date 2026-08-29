@@ -60,6 +60,9 @@ class ParserTest < Minitest::Test
 
     error = assert_raises(Usage::Help) { Usage::Parser.new(root, metadata(nil), []).parse }
     assert_equal "help requested", error.message
+    assert_equal false, error.all
+    assert_equal 1, error.cmd_key
+    assert_equal false, error.long
   end
 
   def test_subcommand_can_negate_parent_requirements
@@ -82,6 +85,28 @@ class ParserTest < Minitest::Test
       error = assert_raises(error_class) { Usage::Parser.new(root, metadata(nil, nil), [token]).parse }
       message = (error_class == Usage::Help) ? "help requested" : "version requested"
       assert_equal message, error.message
+      assert_equal false, error.long if error.is_a?(Usage::Help)
+    end
+  end
+
+  def test_help_requests_keep_the_target_and_style
+    short = Usage::Flag.new(key: 3, name: "short", longs: ["short"], action: :help_short)
+    long = Usage::Flag.new(key: 4, name: "long", shorts: ["l"], action: :help_long)
+    all = Usage::Flag.new(key: 5, name: "all", longs: ["all"], action: :help_all)
+    install = Usage::Command.new(name: "install", key: 2)
+    root = Usage::Command.new(name: "ex", key: 1, cmds: [install], flags: [short, long, all])
+    meta = metadata(nil, nil, nil, nil, nil)
+
+    cases = {
+      ["--help"] => [1, true, false],
+      ["--short"] => [1, false, false],
+      ["-l"] => [1, true, false],
+      ["--all"] => [1, true, true],
+      %w[help install] => [2, true, false]
+    }
+    cases.each do |argv, expected|
+      error = assert_raises(Usage::Help) { Usage::Parser.new(root, meta, argv).parse }
+      assert_equal expected, [error.cmd_key, error.long, error.all]
     end
   end
 end

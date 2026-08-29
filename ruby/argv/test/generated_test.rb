@@ -58,6 +58,30 @@ class GeneratedTest < Minitest::Test
     assert cli.parse(["-l"], argv0: "/usr/bin/ls").ls.long
   end
 
+  def test_generated_help_uses_reference_pages
+    cli = generate(<<~KDL, "GeneratedHelp")
+      name "ex"
+      bin "ex"
+      about "Short root help"
+      long_about "Long root help"
+      flag "--help-all" action="help_all"
+      cmd "zulu" {}
+      cmd "early" display_order=1 {}
+      cmd "hidden" hide=#true {}
+    KDL
+
+    short = assert_raises(Usage::Help) { cli.parse(["-h"]) }
+    long = assert_raises(Usage::Help) { cli.parse(["--help"]) }
+    all = assert_raises(Usage::Help) { cli.parse(["--help-all"]) }
+
+    assert_equal cli::HELP.fetch(cli::CMD_ROOT, long: false), short.message
+    assert_equal cli::HELP.fetch(cli::CMD_ROOT, long: true), long.message
+    assert_includes short.message, "Short root help"
+    assert_includes long.message, "Long root help"
+    assert_operator all.message.index("Usage: ex early"), :<, all.message.index("Usage: ex zulu")
+    refute_includes all.message, "Usage: ex hidden"
+  end
+
   private
 
   def generate(spec, name)

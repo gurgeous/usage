@@ -58,7 +58,7 @@ module Usage
       end
       finish_clause
       if cmd.arg_required_else_help && cmd_starts[cmd.key] == argv.length
-        raise Help, "help requested"
+        help!
       end
       resolve
     end
@@ -153,7 +153,7 @@ module Usage
           value = attached
         end
         start_collecting(flag, value) if flag.variadic && !value.nil?
-        return action!(flag) if flag.action && flag.action != :set
+        return action!(flag, long: true) if flag.action && flag.action != :set
         return bind_flag(flag, value, !value.nil?)
       end
       if (flag = find_negation(name))
@@ -164,7 +164,7 @@ module Usage
         return bind_flag(flag, nil, false, true)
       end
       raise Version, "version requested" if name == "version" && cmd.version && !cmd.disable_version_flag
-      raise Help, "help requested" if name == "help" && !cmd.disable_help_flag
+      help!(long: true) if name == "help" && !cmd.disable_help_flag
       raise Error, "unknown flag: #{token}" if cmd.unknown_flags == :error
       word(token)
     end
@@ -177,7 +177,7 @@ module Usage
         @bundle = rest
         if action
           @bundle = ""
-          return action!(flag)
+          return action!(flag, long: false)
         end
         return bind_flag(flag, nil, false)
       end
@@ -191,7 +191,7 @@ module Usage
         rest
       end
       start_collecting(flag, value) if flag.variadic && !value.nil?
-      return action!(flag) if action
+      return action!(flag, long: false) if action
       bind_flag(flag, value, !value.nil?)
     end
 
@@ -214,9 +214,12 @@ module Usage
       raise Error, "missing value for flag: #{flag.name}"
     end
 
-    def action!(flag)
+    def action!(flag, long:)
       case flag.action
-      when :help, :help_short, :help_long, :help_all then raise Help, "help requested"
+      when :help then help!(long: long)
+      when :help_short then help!
+      when :help_long then help!(long: true)
+      when :help_all then help!(all: true, long: true)
       when :version then raise Version, "version requested"
       end
     end
@@ -233,7 +236,7 @@ module Usage
             help_command = subcommand
             @pos += 1
           end
-          raise Help, "help requested"
+          help!(help_command, long: true)
         end
         default = cmd.default_cmd
         accepts_negative = default && negative_number?(token) && default.args.first&.allow_negative_numbers
@@ -546,6 +549,12 @@ module Usage
 
     def find_named(command, name)
       command.cmds.find { _1.name == name } || command.cmds.find { _1.aliases.include?(name) }
+    end
+
+    def help!(command = cmd, all: false, long: false)
+      error = Help.new("help requested")
+      error.all, error.cmd_key, error.long = all, command.key, long
+      raise error
     end
 
     def bundle_known?(token)
