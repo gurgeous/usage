@@ -17,6 +17,10 @@ pub struct RubyOptions {
 }
 
 /// Turn a spec into one Ruby source file.
+///
+/// # Panics
+///
+/// Panics when an explicitly configured module is not a valid Ruby module path.
 pub fn generate(spec: &Spec, opts: &RubyOptions) -> String {
     Emitter::new(spec, opts).run()
 }
@@ -54,7 +58,6 @@ struct Emitted {
     clause_fields: HashMap<String, Field>,
     subcommands: Vec<usize>,
     parent: Option<usize>,
-    root: bool,
 }
 
 struct Emitter<'a> {
@@ -69,11 +72,16 @@ struct Emitter<'a> {
 
 impl<'a> Emitter<'a> {
     fn new(spec: &'a Spec, opts: &RubyOptions) -> Self {
-        let module = opts
-            .module
-            .clone()
-            .filter(|name| is_valid_module(name))
-            .unwrap_or_else(|| module_ident(&spec.bin));
+        let module = match &opts.module {
+            Some(module) => {
+                assert!(
+                    is_valid_module(module),
+                    "invalid Ruby module path: {module}"
+                );
+                module.clone()
+            }
+            None => module_ident(&spec.bin),
+        };
         Self {
             spec,
             module,
@@ -209,7 +217,6 @@ impl<'a> Emitter<'a> {
             clause_fields: HashMap::new(),
             subcommands: Vec::new(),
             parent,
-            root,
         });
         let mut children = Vec::new();
         for (name, sub) in &cmd.subcommands {
@@ -430,7 +437,7 @@ impl<'a> Emitter<'a> {
             if let Some(value) = &command.cmd.restart_token {
                 fields.push(("restart_token", ruby_string(value)));
             }
-            if command.root {
+            if command.parent.is_none() {
                 if let Some(default) = &default {
                     fields.push(("default_cmd", default.clone()));
                 }
@@ -441,7 +448,7 @@ impl<'a> Emitter<'a> {
                 );
             }
             let literal = ruby_call("Usage::Command", &fields, 4);
-            if command.root {
+            if command.parent.is_none() {
                 let _ = writeln!(self.out, "    {literal}");
             } else {
                 let _ = writeln!(self.out, "    {local} = {literal}");
@@ -522,8 +529,7 @@ impl<'a> Emitter<'a> {
         let workers = std::thread::available_parallelism()
             .map(usize::from)
             .unwrap_or(1)
-            .min(8)
-            .min(commands.len());
+            .min(8);
         let chunk_size = commands.len().div_ceil(workers);
         let pages = std::thread::scope(|scope| {
             let handles = commands
@@ -612,20 +618,7 @@ impl<'a> Emitter<'a> {
                 let child = &commands[*at];
                 fields.push(&command.fields[&child.named.key]);
             }
-            let _ = writeln!(self.out, "  class {}", command.class);
-            if !fields.is_empty() {
-                let _ = writeln!(
-                    self.out,
-                    "    attr_accessor {}",
-                    fields
-                        .iter()
-                        .map(|field| format!(":{}", field.name))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                );
-            }
-            result_initializer(&mut self.out, &fields);
-            self.out.push_str("  end\n\n");
+            result_class(&mut self.out, &command.class, &fields);
 
             if command.cmd.clause.is_some() {
                 let fields = command
@@ -633,24 +626,11 @@ impl<'a> Emitter<'a> {
                     .iter()
                     .map(|(_, named)| &command.clause_fields[&named.key])
                     .collect::<Vec<_>>();
-                let _ = writeln!(
-                    self.out,
-                    "  class {}",
-                    command.clause_class.as_ref().unwrap()
+                result_class(
+                    &mut self.out,
+                    command.clause_class.as_ref().unwrap(),
+                    &fields,
                 );
-                if !fields.is_empty() {
-                    let _ = writeln!(
-                        self.out,
-                        "    attr_accessor {}",
-                        fields
-                            .iter()
-                            .map(|field| format!(":{}", field.name))
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    );
-                }
-                result_initializer(&mut self.out, &fields);
-                self.out.push_str("  end\n\n");
             }
         }
     }
@@ -717,18 +697,12 @@ impl<'a> Emitter<'a> {
                 .push_str("\n    parsed.values.each do |key, values|\n      case key\n");
             for command in commands {
                 let owner = &command.named.key;
-                for (_, named) in &command.flags {
-                    let field = &command.fields[&named.key];
-                    let _ = writeln!(
-                        self.out,
-                        "      when {}\n        cmds.fetch({}).{} = {}",
-                        named.key,
-                        owner,
-                        field.name,
-                        field.kind.parsed_value()
-                    );
-                }
-                for (_, named) in &command.args {
+                for named in command
+                    .flags
+                    .iter()
+                    .map(|(_, named)| named)
+                    .chain(command.args.iter().map(|(_, named)| named))
+                {
                     let field = &command.fields[&named.key];
                     let _ = writeln!(
                         self.out,
@@ -804,15 +778,6 @@ impl FieldKind {
             Self::List
         } else {
             Self::Scalar
-        }
-    }
-
-    fn default(self) -> Option<&'static str> {
-        match self {
-            Self::Scalar => None,
-            Self::Boolean => Some("false"),
-            Self::Count => Some("0"),
-            Self::List => Some("[]"),
         }
     }
 
@@ -897,14 +862,6 @@ fn resolve_fields(commands: &mut [Emitted]) {
     }
 }
 
-fn kwargs(fields: &[(&str, String)]) -> String {
-    fields
-        .iter()
-        .map(|(key, value)| format!("{key}: {value}"))
-        .collect::<Vec<_>>()
-        .join(", ")
-}
-
 fn ruby_call(name: &str, fields: &[(&str, String)], indent: usize) -> String {
     let field_indent = " ".repeat(indent + 2);
     let closing_indent = " ".repeat(indent);
@@ -941,7 +898,7 @@ fn multiline_array(values: &[String], indent: usize) -> String {
 fn result_initializer(out: &mut String, fields: &[&Field]) {
     let initialized = fields
         .iter()
-        .filter(|field| field.kind.default().is_some())
+        .filter(|field| field.kind != FieldKind::Scalar)
         .copied()
         .collect::<Vec<_>>();
     if initialized.is_empty() {
@@ -949,8 +906,7 @@ fn result_initializer(out: &mut String, fields: &[&Field]) {
     }
 
     out.push_str("\n    def initialize\n");
-    for kind in [FieldKind::Boolean, FieldKind::Count] {
-        let default = kind.default().unwrap();
+    for (kind, default) in [(FieldKind::Boolean, "false"), (FieldKind::Count, "0")] {
         let names = initialized
             .iter()
             .filter(|field| field.kind == kind)
@@ -978,6 +934,23 @@ fn result_initializer(out: &mut String, fields: &[&Field]) {
     out.push_str("    end\n");
 }
 
+fn result_class(out: &mut String, name: &str, fields: &[&Field]) {
+    let _ = writeln!(out, "  class {name}");
+    if !fields.is_empty() {
+        let _ = writeln!(
+            out,
+            "    attr_accessor {}",
+            fields
+                .iter()
+                .map(|field| format!(":{}", field.name))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+    result_initializer(out, fields);
+    out.push_str("  end\n\n");
+}
+
 fn push_true(fields: &mut Vec<(&'static str, String)>, key: &'static str, value: bool) {
     if value {
         fields.push((key, "true".into()));
@@ -999,10 +972,6 @@ fn ruby_array(values: &[String]) -> String {
             .collect::<Vec<_>>()
             .join(", ")
     )
-}
-
-fn key_array(values: &[String]) -> String {
-    format!("[{}]", values.join(", "))
 }
 
 fn flag_literal(flag: &SpecFlag, named: &Named, indent: usize) -> String {
@@ -1163,13 +1132,12 @@ fn flag_meta(
     if let Some(choices) = flag.arg.as_ref().and_then(|arg| arg.choices.as_ref()) {
         choice_fields(&mut fields, choices);
     }
-    let default = if flag.default.is_empty() {
+    let default = if !flag.default.is_empty() {
+        flag.default.as_slice()
+    } else {
         flag.arg
             .as_ref()
-            .map(|arg| &arg.default)
-            .unwrap_or(&flag.default)
-    } else {
-        &flag.default
+            .map_or(&[][..], |arg| arg.default.as_slice())
     };
     push_vec(&mut fields, "default", default);
     if let Some(value) = &flag.env {
@@ -1209,7 +1177,7 @@ fn flag_meta(
     ] {
         let keys = resolve_relationship(names, owner, commands);
         if !keys.is_empty() {
-            fields.push((label, key_array(&keys)));
+            fields.push((label, format!("[{}]", keys.join(", "))));
         }
     }
     push_conditions(
@@ -1251,7 +1219,12 @@ fn flag_meta(
                     if let Some(when) = &condition.when {
                         fields.push(("when", ruby_string(when)));
                     }
-                    format!("{{ {} }}", kwargs(&fields))
+                    let fields = fields
+                        .iter()
+                        .map(|(key, value)| format!("{key}: {value}"))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    format!("{{ {fields} }}")
                 })
         })
         .collect::<Vec<_>>();
@@ -1304,7 +1277,7 @@ fn arg_meta(
     ] {
         let keys = resolve_relationship(names, owner, commands);
         if !keys.is_empty() {
-            fields.push((label, key_array(&keys)));
+            fields.push((label, format!("[{}]", keys.join(", "))));
         }
     }
     push_conditions(
@@ -1452,15 +1425,14 @@ fn resolve_relationship(names: &[String], owner: &Emitted, commands: &[Emitted])
                     .map(|(_, named)| named.key.clone());
             }
             if found.is_none() {
-                let path = &owner.cmd.full_cmd;
-                for depth in (0..path.len()).rev() {
-                    let ancestor = commands.iter().find(|entry| {
-                        entry.cmd.full_cmd.len() == depth && entry.cmd.full_cmd[..] == path[..depth]
-                    });
-                    if let Some(key) = ancestor.and_then(|entry| match_flag(entry, name, true)) {
+                let mut parent = owner.parent;
+                while let Some(index) = parent {
+                    let ancestor = &commands[index];
+                    if let Some(key) = match_flag(ancestor, name, true) {
                         found = Some(key);
                         break;
                     }
+                    parent = ancestor.parent;
                 }
             }
             found
@@ -1500,14 +1472,13 @@ fn match_flag(command: &Emitted, name: &str, globals_only: bool) -> Option<Strin
 }
 
 fn effective_unknown_flags(spec: &Spec, commands: &[Emitted], at: usize) -> UnknownFlags {
-    let path = &commands[at].cmd.full_cmd;
-    for depth in (0..=path.len()).rev() {
-        let ancestor = commands.iter().find(|entry| {
-            entry.cmd.full_cmd.len() == depth && entry.cmd.full_cmd[..] == path[..depth]
-        });
-        if let Some(mode) = ancestor.and_then(|entry| entry.cmd.unknown_flags) {
+    let mut current = Some(at);
+    while let Some(index) = current {
+        let command = &commands[index];
+        if let Some(mode) = command.cmd.unknown_flags {
             return mode;
         }
+        current = command.parent;
     }
     spec.unknown_flags.unwrap_or_default()
 }
@@ -1819,6 +1790,18 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "invalid Ruby module path: my_cli")]
+    fn rejects_invalid_explicit_modules() {
+        let spec: Spec = "name \"ex\"\nbin \"ex\"\n".parse().unwrap();
+        generate(
+            &spec,
+            &RubyOptions {
+                module: Some("my_cli".into()),
+            },
+        );
+    }
+
+    #[test]
     fn emits_nested_modules() {
         let spec: Spec = "name \"ex\"\nbin \"ex\"\n".parse().unwrap();
         let out = generate(
@@ -1990,9 +1973,6 @@ mod tests {
         assert!(out.contains("allow_hyphen_values: true"), "{out}");
         assert!(out.contains("require_equals: true"), "{out}");
         assert!(out.contains("default_missing: \"always\""), "{out}");
-        assert!(out.contains("variadic: true"), "{out}");
-        assert!(out.contains("var_max: 2"), "{out}");
-        assert!(out.contains("var_min: 2"), "{out}");
         let root = out
             .split("ROOT = begin")
             .nth(1)
@@ -2000,7 +1980,23 @@ mod tests {
             .split("META =")
             .next()
             .unwrap();
-        let tag = root.split("key: FLAG_TAG,").nth(1).unwrap();
+        let include = root
+            .split("key: FLAG_INCLUDE,")
+            .nth(1)
+            .unwrap()
+            .split("        ),")
+            .next()
+            .unwrap();
+        assert!(include.contains("variadic: true"), "{include}");
+        assert!(include.contains("var_max: 2"), "{include}");
+        assert!(!include.contains("var_min:"), "{include}");
+        let tag = root
+            .split("key: FLAG_TAG,")
+            .nth(1)
+            .unwrap()
+            .split("        ),")
+            .next()
+            .unwrap();
         assert!(!tag.contains("variadic: true"), "{tag}");
         assert!(!tag.contains("var_max:"), "{tag}");
 
@@ -2011,7 +2007,23 @@ mod tests {
             .split("COMPLETION =")
             .next()
             .unwrap();
-        let tag = meta.split("key: FLAG_TAG,").nth(1).unwrap();
+        let include = meta
+            .split("key: FLAG_INCLUDE,")
+            .nth(1)
+            .unwrap()
+            .split("      },")
+            .next()
+            .unwrap();
+        assert!(include.contains("variadic: true"), "{include}");
+        assert!(include.contains("var_min: 2"), "{include}");
+        assert!(!include.contains("var_max:"), "{include}");
+        let tag = meta
+            .split("key: FLAG_TAG,")
+            .nth(1)
+            .unwrap()
+            .split("      },")
+            .next()
+            .unwrap();
         assert!(tag.contains("variadic: true"), "{tag}");
         assert!(tag.contains("var_max: 1"), "{tag}");
     }
