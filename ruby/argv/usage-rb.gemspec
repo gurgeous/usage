@@ -1,18 +1,21 @@
 require_relative "lib/usage/version"
 
-Gem::Specification.new do |spec|
-  spec.name = "usage-rb"
-  spec.version = Usage::VERSION
-  spec.authors = ["Jeff Dickey @jdx"]
-  spec.summary = "Ruby runtime for generated Usage argument parsers"
-  spec.homepage = "https://usage.jdx.dev"
-  spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.3"
-  spec.files = Dir["lib/**/*.rb", "LICENSE", "README.md"]
-  spec.require_paths = ["lib"]
+Gem::Specification.new do |s|
+  s.name = "usage-rb"
+  s.version = Usage::VERSION
+  s.authors = ["@jdx"]
 
-  spec.add_development_dependency "minitest", "~> 6.0"
-  spec.add_development_dependency "rubocop", "~> 1.88"
-  spec.add_development_dependency "ruby-lsp", "~> 0.26"
-  spec.add_development_dependency "standard", "~> 1.56"
+  s.summary = "`usage` cli arg framework for ruby"
+  s.homepage = "https://usage.jdx.dev"
+  s.license = "MIT"
+  s.required_ruby_version = ">= 3.3"
+  s.metadata = {
+    "homepage_uri" => s.homepage,
+    "rubygems_mfa_required" => "true",
+    "source_code_uri" => s.homepage,
+  }
+
+  # what's in the gem?
+  s.files = Dir["lib/**/*.rb", "LICENSE", "README.md"]
+  s.require_paths = ["lib"]
 end

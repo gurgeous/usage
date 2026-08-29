@@ -9,4 +9,5 @@ require_relative "usage/split_line"
 require_relative "usage/tables"
 require_relative "usage/version"
 
+# must come last
 require_relative "usage/parser"
