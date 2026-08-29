@@ -169,11 +169,13 @@ run = [
 ]
 
 [tasks.lint-fix]
+depends = ['install:ruby']
 run = [
     'cargo clippy --all --all-features --fix --allow-dirty --allow-staged -- -D warnings',
     'cargo fmt --all',
     'gofmt -w go benches/go',
     'prettier -w .',
+    'cd ruby/argv && bundle exec standardrb --fix',
 ]
 
 [tasks.ci]
