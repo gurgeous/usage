@@ -161,7 +161,7 @@ class ParserTest < Minitest::Test
       [[], {"EX_JOBS" => ""}, [""], :env]
     ]
     cases.each do |argv, env, values, source|
-      parsed = Usage::Parser.new(root, meta, argv, env: env).parse
+      parsed = Usage::Parser.new(root, meta, argv, env:).parse
       assert_equal values, parsed.values[2]
       assert_equal source, parsed.sources[2]
     end

@@ -82,10 +82,10 @@ class CompletionAnswerTest < Minitest::Test
   private
 
   def answer(*candidates, files: nil)
-    Usage::CompletionAnswer.new(candidates: candidates, files: files)
+    Usage::CompletionAnswer.new(candidates:, files:)
   end
 
   def candidate(value, description = nil)
-    Usage::CompletionCandidate.new(description: description, value: value)
+    Usage::CompletionCandidate.new(description:, value:)
   end
 end

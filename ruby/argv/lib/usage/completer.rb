@@ -18,7 +18,7 @@ module Usage
 
     def answer(line, cursor: nil, shell: :bash)
       shell = normalize_shell(shell)
-      split = SplitLine.new(line, cursor: cursor, shell: shell)
+      split = SplitLine.new(line, cursor:, shell:)
       position = walk(split.argv)
       found = candidates(position, split.prefix)
       CompletionAnswer.new(candidates: found, files: files_at(position, split.prefix, found))
@@ -50,13 +50,13 @@ module Usage
         arg_values: restarted ? 0 : parser.arg_taken,
         awaiting: restarted ? nil : parser.awaiting,
         collecting: restarted ? nil : parser.collecting,
-        cmd: cmd,
+        cmd:,
         cmd_path: parser.cmd_path,
         external: !parser.external.empty?,
         flags_possible: restarted || !parser.flags_stopped,
         help_topic: !help.nil?,
         next_arg: restarted ? arguments(cmd).find { !_1.sigil } : parser.pending_arg,
-        restarted: restarted,
+        restarted:,
         sep_seen: restarted ? false : parser.sep_seen,
         subcommands_possible: restarted || parser.subcommands_possible?
       )
@@ -121,7 +121,7 @@ module Usage
       return [] unless entry
 
       metadata[entry.key]&.fetch(:choices, [])&.filter_map do |value|
-        CompletionCandidate.new(description: nil, kind: :value, value: value) if value.start_with?(partial)
+        CompletionCandidate.new(description: nil, kind: :value, value:) if value.start_with?(partial)
       end || []
     end
 
@@ -234,9 +234,12 @@ module Usage
 
     def normalize_shell(shell)
       shell = shell.to_s.downcase.to_sym
-      shell = :nu if shell == :nushell
-      shell = :powershell if shell == :pwsh
-      SHELLS.include?(shell) ? shell : :bash
+      case shell
+      when :nushell then :nu
+      when :pwsh then :powershell
+      when *SHELLS then shell
+      else :bash
+      end
     end
 
     def forms(flag)

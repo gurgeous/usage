@@ -184,12 +184,10 @@ module Usage
       end
 
       @bundle = ""
-      value = if rest.empty?
-        detached_value(flag)
-      elsif rest.start_with?("=")
-        rest[1..]
-      else
-        rest
+      value = case rest
+      when "" then detached_value(flag)
+      when /\A=/ then rest[1..]
+      else rest
       end
       start_collecting(flag, value) if flag.variadic && !value.nil?
       return action!(flag, long: false) if action

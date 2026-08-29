@@ -46,6 +46,6 @@ class SplitLineTest < Minitest::Test
 
   def split_at(line, shell = :bash)
     cursor = line.index("⌶") || line.bytesize
-    Usage::SplitLine.new(line.sub("⌶", ""), cursor: cursor, shell: shell)
+    Usage::SplitLine.new(line.sub("⌶", ""), cursor:, shell:)
   end
 end

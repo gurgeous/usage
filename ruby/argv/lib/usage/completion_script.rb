@@ -234,11 +234,12 @@ module Usage
 
     def normalize_shell(value)
       value = value.to_s.downcase.to_sym
-      value = :nu if value == :nushell
-      value = :powershell if value == :pwsh
-      raise ArgumentError, "unsupported shell: #{value}" unless %i[bash fish nu powershell zsh].include?(value)
-
-      value
+      case value
+      when :nushell then :nu
+      when :pwsh then :powershell
+      when :bash, :fish, :nu, :powershell, :zsh then value
+      else raise ArgumentError, "unsupported shell: #{value}"
+      end
     end
 
     def nu_ident
