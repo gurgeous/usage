@@ -218,7 +218,7 @@ module Usage
 
     def action!(flag, long:)
       case flag.action
-      when :help then help!(long: long)
+      when :help then help!(long:)
       when :help_short then help!
       when :help_long then help!(long: true)
       when :help_all then help!(all: true, long: true)
@@ -360,9 +360,9 @@ module Usage
         values[key] = item[:values]
         occurrences[key], negated[key], sources[key] = item[:occurrences], item[:negated], item[:source]
       end
-      Parsed.new(cmd_keys: cmd_path.map(&:key), values: values,
-        occurrences: occurrences, negated: negated, sources: sources,
-        clauses: resolved_clauses(final), external: external)
+      Parsed.new(cmd_keys: cmd_path.map(&:key), values:,
+        occurrences:, negated:, sources:,
+        clauses: resolved_clauses(final), external:)
     end
 
     def fill(key, value_less, bound)
@@ -374,7 +374,7 @@ module Usage
         [meta[:env], *meta.fetch(:env_fallback, []), *meta.fetch(:deprecated_env, [])].compact.each do |name|
           if env.key?(name)
             values = fallback_values(meta, [env[name]])
-            return {values: values, source: :env, occurrences: bound&.occurrences.to_i, negated: bound&.negated}
+            return {values:, source: :env, occurrences: bound&.occurrences.to_i, negated: bound&.negated}
           end
         end
         unless meta.fetch(:default_if, []).any?
