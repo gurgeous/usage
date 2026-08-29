@@ -522,7 +522,7 @@ impl<'a> Emitter<'a> {
         self.out.push_str(concat!(
             "    ]\n",
             "  )\n",
-            "  COMPLETER = Usage::Completer.new(ROOT, META, COMPLETION)\n\n",
+            "  COMPLETER = Usage::Complete::Engine.new(ROOT, META, COMPLETION)\n\n",
         ));
     }
 
@@ -649,7 +649,7 @@ impl<'a> Emitter<'a> {
         ));
         let _ = writeln!(
             self.out,
-            "  def self.completion_script(shell)\n    Usage::CompletionScript.new({}, shell).render\n  end\n",
+            "  def self.completion_script(shell)\n    Usage::Complete::Script.new({}, shell).render\n  end\n",
             ruby_string(&self.spec.bin)
         );
         if self.spec.multicall {

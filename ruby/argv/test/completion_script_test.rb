@@ -10,7 +10,7 @@ class CompletionScriptTest < Minitest::Test
       zsh: "compdef _mise 'mise'"
     }
     registrations.each do |shell, registration|
-      script = Usage::CompletionScript.new("mise", shell).render
+      script = Usage::Complete::Script.new("mise", shell).render
 
       assert_includes script, "mise __complete_word__ --shell #{shell}"
       assert_includes script, registration
@@ -24,7 +24,7 @@ class CompletionScriptTest < Minitest::Test
   def test_scripts_handle_every_path_marker
     assert_equal({
       any: "\x01files", commands: "\x01commands", dirs: "\x01dirs", executables: "\x01executables"
-    }, Usage::COMPLETION_MARKERS)
+    }, Usage::Complete::MARKERS)
     bash = script(:bash)
     zsh = script(:zsh)
     %w[files dirs executables commands].each do
@@ -80,24 +80,24 @@ class CompletionScriptTest < Minitest::Test
   end
 
   def test_nu_identifiers_do_not_collapse
-    dashed = Usage::CompletionScript.new("foo-bar", :nu).render
-    plus = Usage::CompletionScript.new("foo+bar", :nu).render
-    escaped = Usage::CompletionScript.new("foo_x2dbar", :nu).render
+    dashed = Usage::Complete::Script.new("foo-bar", :nu).render
+    plus = Usage::Complete::Script.new("foo+bar", :nu).render
+    escaped = Usage::Complete::Script.new("foo_x2dbar", :nu).render
 
     assert_includes dashed, "__usage_complete_foo_x2dbar"
     refute_includes plus, "__usage_complete_foo_x2dbar"
     refute_includes escaped, "__usage_complete_foo_x2dbar"
-    assert_includes Usage::CompletionScript.new("foo-bar", :bash).render, "_usage_complete_foo-bar()"
+    assert_includes Usage::Complete::Script.new("foo-bar", :bash).render, "_usage_complete_foo-bar()"
   end
 
   def test_invalid_binary_and_shell_are_rejected
     ["", "my cli", "it's", "a;b", "a$b"].each do |bin|
-      assert_raises(ArgumentError) { Usage::CompletionScript.new(bin, :bash) }
+      assert_raises(ArgumentError) { Usage::Complete::Script.new(bin, :bash) }
     end
     %w[mise foo-bar foo_bar foo.bar g++ 7zip].each do
-      Usage::CompletionScript.new(_1, :bash)
+      Usage::Complete::Script.new(_1, :bash)
     end
-    assert_raises(ArgumentError) { Usage::CompletionScript.new("mise", :tcsh) }
+    assert_raises(ArgumentError) { Usage::Complete::Script.new("mise", :tcsh) }
   end
 
   def test_zsh_supports_sourcing_and_fpath_autoloading
@@ -111,6 +111,6 @@ class CompletionScriptTest < Minitest::Test
   private
 
   def script(shell)
-    Usage::CompletionScript.new("mise", shell).render
+    Usage::Complete::Script.new("mise", shell).render
   end
 end

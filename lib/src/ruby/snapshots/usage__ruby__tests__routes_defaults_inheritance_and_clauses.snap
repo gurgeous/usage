@@ -100,7 +100,7 @@ module Ex
       }
     ]
   )
-  COMPLETER = Usage::Completer.new(ROOT, META, COMPLETION)
+  COMPLETER = Usage::Complete::Engine.new(ROOT, META, COMPLETION)
 
   HELP = Usage::HelpPages.new(
     {
@@ -216,7 +216,7 @@ module Ex
   end
 
   def self.completion_script(shell)
-    Usage::CompletionScript.new("ex", shell).render
+    Usage::Complete::Script.new("ex", shell).render
   end
 
   def self.parse(args = ARGV)

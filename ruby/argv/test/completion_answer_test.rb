@@ -2,10 +2,10 @@ require_relative "test_helper"
 
 class CompletionAnswerTest < Minitest::Test
   def test_shell_formats
-    answer = Usage::CompletionAnswer.new(
+    answer = Usage::Complete::Answer.new(
       candidates: [
-        Usage::CompletionCandidate.new(description: "Installs a tool", kind: :command, value: "use"),
-        Usage::CompletionCandidate.new(description: nil, kind: :flag, value: "--global")
+        Usage::Complete::Candidate.new(description: "Installs a tool", kind: :command, value: "use"),
+        Usage::Complete::Candidate.new(description: nil, kind: :flag, value: "--global")
       ],
       files: nil
     )
@@ -64,11 +64,11 @@ class CompletionAnswerTest < Minitest::Test
   end
 
   def test_unsafe_candidates_are_dropped
-    rendered = Usage::CompletionAnswer.new(
+    rendered = Usage::Complete::Answer.new(
       candidates: [
-        Usage::CompletionCandidate.new(value: "one\ttwo\nthree"),
-        Usage::CompletionCandidate.new(value: "\x01files"),
-        Usage::CompletionCandidate.new(value: "plain")
+        Usage::Complete::Candidate.new(value: "one\ttwo\nthree"),
+        Usage::Complete::Candidate.new(value: "\x01files"),
+        Usage::Complete::Candidate.new(value: "plain")
       ]
     )
 
@@ -82,10 +82,10 @@ class CompletionAnswerTest < Minitest::Test
   private
 
   def answer(*candidates, files: nil)
-    Usage::CompletionAnswer.new(candidates:, files:)
+    Usage::Complete::Answer.new(candidates:, files:)
   end
 
   def candidate(value, description = nil)
-    Usage::CompletionCandidate.new(description:, value:)
+    Usage::Complete::Candidate.new(description:, value:)
   end
 end

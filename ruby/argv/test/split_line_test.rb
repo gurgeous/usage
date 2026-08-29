@@ -31,9 +31,9 @@ class SplitLineTest < Minitest::Test
   end
 
   def test_cursor_outside_or_inside_a_character
-    assert_equal "run", Usage::SplitLine.new("ex run", cursor: 999).prefix
-    assert_equal "", Usage::SplitLine.new("ex ünïcode", cursor: 4).prefix
-    assert_equal "ün", Usage::SplitLine.new("ex ünïcode", cursor: 7).prefix
+    assert_equal "run", Usage::Complete::Line.new("ex run", cursor: 999).prefix
+    assert_equal "", Usage::Complete::Line.new("ex ünïcode", cursor: 4).prefix
+    assert_equal "ün", Usage::Complete::Line.new("ex ünïcode", cursor: 7).prefix
   end
 
   def test_argv_excludes_program_and_partial
@@ -46,6 +46,6 @@ class SplitLineTest < Minitest::Test
 
   def split_at(line, shell = :bash)
     cursor = line.index("⌶") || line.bytesize
-    Usage::SplitLine.new(line.sub("⌶", ""), cursor:, shell:)
+    Usage::Complete::Line.new(line.sub("⌶", ""), cursor:, shell:)
   end
 end
