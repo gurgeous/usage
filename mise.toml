@@ -89,9 +89,9 @@ run = 'bundle check || bundle install'
 dir = "{{config_root}}"
 depends = ['install:ruby']
 run = [
-    'mbx build -p usage-cli',
+    'mbx build -p usage-cli -p xtask',
     'mbx test -p usage-lib --all-features ruby',
-    'cd ruby/argv && USAGE_BIN="{{config_root}}/target/debug/usage" bundle exec ruby -Ilib -Itest test/suite.rb',
+    'cd ruby/argv && USAGE_BIN="{{config_root}}/target/debug/usage" XTASK_BIN="{{config_root}}/target/debug/xtask" bundle exec ruby -Ilib -Itest test/suite.rb',
 ]
 
 [tasks.lint]

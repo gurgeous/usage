@@ -49,9 +49,18 @@ class ParserTest < Minitest::Test
   end
 
   def test_multicall_rewrite
+    assert_equal "ls", Usage::Parser.multicall_basename("/usr/bin/ls")
+    assert_equal "ls", Usage::Parser.multicall_basename("C:\\busybox\\ls.exe")
+    assert_equal "LS", Usage::Parser.multicall_basename("LS.EXE")
     assert_equal %w[ls -l], Usage::Parser.rewrite_multicall("/usr/bin/ls", ["-l"], "busybox", "busybox")
     assert_equal %w[ls -l], Usage::Parser.rewrite_multicall("C:\\bin\\ls.exe", ["-l"], "busybox", "busybox")
     assert_equal ["ls"], Usage::Parser.rewrite_multicall("busybox", ["ls"], "busybox", "busybox")
+    assert_equal %w[ls -l], Usage::Parser.rewrite_multicall(
+      "/usr/bin/busybox", %w[ls -l], "/opt/bin/busybox.exe", ""
+    )
+    assert_equal %w[ls -l], Usage::Parser.rewrite_multicall(
+      "C:\\tools\\busybox.exe", %w[ls -l], "", "/opt/bin/busybox"
+    )
     assert_equal ["ls"], Usage::Parser.rewrite_multicall(nil, ["ls"], $PROGRAM_NAME, nil)
   end
 
@@ -108,5 +117,58 @@ class ParserTest < Minitest::Test
       error = assert_raises(Usage::Help) { Usage::Parser.new(root, meta, argv).parse }
       assert_equal expected, [error.cmd_key, error.long, error.all]
     end
+  end
+
+  def test_declared_help_actions_and_disabled_synthetic_entries
+    assist = Usage::Flag.new(key: 2, name: "assist", longs: ["assist"], action: :help_short)
+    run = Usage::Command.new(key: 3, name: "run")
+    root = Usage::Command.new(
+      key: 1, name: "custom", cmds: [run], flags: [assist],
+      disable_help_cmd: true, disable_help_flag: true
+    )
+    meta = metadata(nil, {key: 2, name: "assist", flag: true}, nil)
+
+    help = assert_raises(Usage::Help) { Usage::Parser.new(root, meta, ["--assist"]).parse }
+    refute help.long
+    {"--help" => "unexpected argument: --help", "help" => "unexpected argument: help"}.each do |token, message|
+      error = assert_raises(Usage::Error) { Usage::Parser.new(root, meta, [token]).parse }
+      assert_instance_of Usage::Error, error
+      assert_equal message, error.message
+    end
+
+    all = Usage::Flag.new(key: 2, name: "help-all", longs: ["help-all"], action: :help_all)
+    recursive = Usage::Command.new(key: 1, name: "custom", flags: [all])
+    all_meta = metadata(nil, {key: 2, name: "help-all", flag: true})
+    help = assert_raises(Usage::Help) { Usage::Parser.new(recursive, all_meta, ["--help-all"]).parse }
+    assert help.all
+    assert help.long
+  end
+
+  def test_value_sources_follow_fill_order
+    jobs = Usage::Flag.new(key: 2, name: "jobs", longs: ["jobs"], takes_value: true)
+    root = Usage::Command.new(key: 1, name: "ex", flags: [jobs])
+    meta = metadata(nil, {
+      key: 2, name: "jobs", flag: true, env: "EX_JOBS",
+      env_fallback: %w[OLD_JOBS OLDER_JOBS], deprecated_env: ["DEPRECATED_JOBS"], default: ["1"]
+    })
+
+    cases = [
+      [["--jobs", "8"], {"EX_JOBS" => "4"}, ["8"], :argv],
+      [[], {"EX_JOBS" => "4", "OLD_JOBS" => "3"}, ["4"], :env],
+      [[], {"OLD_JOBS" => "3", "OLDER_JOBS" => "2"}, ["3"], :env],
+      [[], {"DEPRECATED_JOBS" => "2"}, ["2"], :env],
+      [[], {}, ["1"], :default],
+      [[], {"EX_JOBS" => ""}, [""], :env]
+    ]
+    cases.each do |argv, env, values, source|
+      parsed = Usage::Parser.new(root, meta, argv, env: env).parse
+      assert_equal values, parsed.values[2]
+      assert_equal source, parsed.sources[2]
+    end
+  end
+
+  def test_truthy_environment_allow_list
+    %w[1 true True TRUE].each { assert Usage::Parser.truthy?(_1), _1 }
+    ["0", "false", "", "yes", "on", "TrUe", "2"].each { refute Usage::Parser.truthy?(_1), _1 }
   end
 end

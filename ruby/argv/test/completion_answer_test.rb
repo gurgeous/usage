@@ -12,13 +12,17 @@ class CompletionAnswerTest < Minitest::Test
 
     assert_equal "use\n--global\n", answer.render(:bash)
     assert_equal "use\tInstalls a tool\tuse\n--global\t\t--global\n", answer.render(:zsh)
-    assert_equal "use\tInstalls a tool\n--global\t\n", answer.render(:fish)
+    %i[fish nu powershell].each do |shell|
+      assert_equal "use\tInstalls a tool\n--global\t\n", answer.render(shell), shell
+    end
   end
 
   def test_files_marker
-    answer = Usage::CompletionAnswer.new(candidates: [], files: :dirs)
+    candidate = candidate("use")
 
-    assert_equal "\x01dirs\n", answer.render(:bash)
+    assert_equal "use\n\x01files\n", answer(candidate, files: :any).render(:bash)
+    assert_equal "use\n\x01dirs\n", answer(candidate, files: :dirs).render(:bash)
+    assert_equal "use\n", answer(candidate).render(:bash)
   end
 
   def test_description_columns_are_all_or_nothing
@@ -30,11 +34,13 @@ class CompletionAnswerTest < Minitest::Test
   end
 
   def test_descriptions_are_collapsed_onto_one_line
-    output = answer(candidate("run", "does  a thing\nand\x01another\x7f")).render(:zsh)
+    %i[fish zsh].each do |shell|
+      output = answer(candidate("run", "does  a thing\nand\x01another\x7f")).render(shell)
 
-    assert_equal 1, output.count("\n")
-    assert_includes output, "does  a thing and another"
-    refute_match(/[\x00-\x1f\x7f]/, output.delete("\t\n"))
+      assert_equal 1, output.count("\n"), shell
+      assert_includes output, "does  a thing and another"
+      refute_match(/[\x00-\x1f\x7f]/, output.delete("\t\n"))
+    end
   end
 
   def test_zsh_quotes_insertions
@@ -50,26 +56,33 @@ class CompletionAnswerTest < Minitest::Test
   end
 
   def test_dropped_rows_do_not_add_a_description_column
-    output = answer(candidate("bad\tvalue", "description"), candidate("plain")).render(:fish)
+    %i[fish nu powershell].each do |shell|
+      output = answer(candidate("bad\tvalue", "description"), candidate("plain")).render(shell)
 
-    assert_equal "plain\n", output
+      assert_equal "plain\n", output, shell
+    end
   end
 
   def test_unsafe_candidates_are_dropped
-    answer = Usage::CompletionAnswer.new(
+    rendered = Usage::CompletionAnswer.new(
       candidates: [
-        Usage::CompletionCandidate.new(value: "bad\tvalue"),
+        Usage::CompletionCandidate.new(value: "one\ttwo\nthree"),
+        Usage::CompletionCandidate.new(value: "\x01files"),
         Usage::CompletionCandidate.new(value: "plain")
       ]
     )
 
-    assert_equal "plain\n", answer.render(:bash)
+    %i[bash zsh fish nu powershell].each do |shell|
+      output = rendered.render(shell)
+      assert_equal 1, output.count("\n"), shell
+      assert output.start_with?("plain"), shell
+    end
   end
 
   private
 
-  def answer(*candidates)
-    Usage::CompletionAnswer.new(candidates: candidates)
+  def answer(*candidates, files: nil)
+    Usage::CompletionAnswer.new(candidates: candidates, files: files)
   end
 
   def candidate(value, description = nil)

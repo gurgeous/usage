@@ -1909,4 +1909,219 @@ mod tests {
             "{out}"
         );
     }
+
+    #[test]
+    fn rich_choices_keep_acceptance_visibility_and_strictness_separate() {
+        let out = ruby(
+            r#"
+            name "ex"
+            bin "ex"
+            flag "--color <when>" {
+                choices ignore_case=#true strict=#false {
+                    choice "always" {
+                        alias "yes"
+                        alias "on" hide=#true
+                    }
+                    choice "never" hide=#true
+                }
+            }
+        "#,
+        );
+        assert!(out.contains("choices: [\"always\", \"yes\"]"), "{out}");
+        assert!(
+            out.contains("accepted_choices: [\"always\", \"never\", \"yes\", \"on\"]"),
+            "{out}"
+        );
+        assert!(out.contains("ignore_case: true"), "{out}");
+        assert!(out.contains("allow_unknown_choices: true"), "{out}");
+    }
+
+    #[test]
+    fn command_and_flag_controls_reach_ruby_tables() {
+        let out = ruby(
+            r#"
+            name "ex"
+            bin "ex"
+            disable_help_flag #true
+            disable_help_subcommand #true
+            disable_version_flag #true
+            arg_required_else_help #true
+            subcommand_negates_reqs #true
+            args_conflicts_with_subcommands #true
+            allow_missing_positional #true
+            flag "--color [WHEN]" value_optional=#true
+            flag "--feature" bool_value=#true
+            flag "--help-all" action="help_all"
+            flag "--version" action="version"
+        "#,
+        );
+        for field in [
+            "disable_help_flag: true",
+            "disable_help_cmd: true",
+            "disable_version_flag: true",
+            "arg_required_else_help: true",
+            "cmd_negates_requirements: true",
+            "args_conflict_with_cmds: true",
+            "allow_missing_positional: true",
+            "value_optional: true",
+            "bool_value: true",
+            "action: :help_all",
+            "action: :version",
+        ] {
+            assert!(out.contains(field), "missing {field:?}:\n{out}");
+        }
+    }
+
+    #[test]
+    fn flag_binding_controls_reach_ruby_tables() {
+        let out = ruby(
+            r#"
+            name "ex"
+            bin "ex"
+            flag "--args <ARGS>" allow_hyphen_values=#true
+            flag "--inspect <PORT>" require_equals=#true
+            flag "--color <WHEN>" default_missing="always"
+            flag "--include <PATTERN>..." {
+                arg "<PATTERN>..." var=#true var_min=2 var_max=2
+            }
+            flag "--tag <TAG>" var=#true var_max=1
+        "#,
+        );
+        assert!(out.contains("allow_hyphen_values: true"), "{out}");
+        assert!(out.contains("require_equals: true"), "{out}");
+        assert!(out.contains("default_missing: \"always\""), "{out}");
+        assert!(out.contains("variadic: true"), "{out}");
+        assert!(out.contains("var_max: 2"), "{out}");
+        assert!(out.contains("var_min: 2"), "{out}");
+        let root = out
+            .split("ROOT = begin")
+            .nth(1)
+            .unwrap()
+            .split("META =")
+            .next()
+            .unwrap();
+        let tag = root.split("key: FLAG_TAG,").nth(1).unwrap();
+        assert!(!tag.contains("variadic: true"), "{tag}");
+        assert!(!tag.contains("var_max:"), "{tag}");
+
+        let meta = out
+            .split("META = Usage::Metadata.new(")
+            .nth(1)
+            .unwrap()
+            .split("COMPLETION =")
+            .next()
+            .unwrap();
+        let tag = meta.split("key: FLAG_TAG,").nth(1).unwrap();
+        assert!(tag.contains("variadic: true"), "{tag}");
+        assert!(tag.contains("var_max: 1"), "{tag}");
+    }
+
+    #[test]
+    fn strict_duplicate_policy_reaches_ruby_metadata() {
+        let permissive = ruby("name \"ex\"\nbin \"ex\"\nflag \"--jobs <n>\"\n");
+        assert!(!permissive.contains("reject_duplicate"), "{permissive}");
+
+        let strict =
+            ruby("name \"ex\"\nbin \"ex\"\nargs_override_self #false\nflag \"--jobs <n>\"\n");
+        assert!(strict.contains("reject_duplicate: true"), "{strict}");
+    }
+
+    #[test]
+    fn default_subcommand_resolution_matches_the_parser() {
+        let nested = ruby(
+            r#"
+            name "ex"
+            bin "ex"
+            default_subcommand "run"
+            cmd "oci" { cmd "run" {} }
+            cmd "run" {}
+        "#,
+        );
+        assert!(nested.contains("default_cmd: cmd_run"), "{nested}");
+
+        for commands in [
+            "cmd \"alpha\" { alias \"run\" }\ncmd \"run\" {}",
+            "cmd \"run\" {}\ncmd \"alpha\" { alias \"run\" }",
+        ] {
+            let out = ruby(&format!(
+                "name \"ex\"\nbin \"ex\"\ndefault_subcommand \"run\"\n{commands}\n"
+            ));
+            assert!(out.contains("default_cmd: cmd_run"), "{out}");
+        }
+    }
+
+    #[test]
+    fn relationship_forms_and_conditions_reach_ruby_metadata() {
+        let out = ruby(
+            r#"
+            name "ex"
+            bin "ex"
+            flag "--quiet" global=#true
+            flag "--color" negate="--no-color"
+            flag "--plain" conflicts="--no-color"
+            flag "--format <format>" { requires_if "json" "--schema" }
+            flag "--schema <file>"
+            flag "--token <token>" { required_if_eq "--mode" "remote" }
+            flag "--mode <mode>"
+            flag "--bin-names" {
+                default_if "--json" "true"
+                default_if "--output" "json" "pretty"
+            }
+            flag "--json"
+            flag "--output <fmt>"
+            cmd "run" { flag "--loud" conflicts="--quiet" }
+        "#,
+        );
+        assert!(out.contains("conflicts: [FLAG_COLOR]"), "{out}");
+        assert!(out.contains("conflicts: [FLAG_QUIET]"), "{out}");
+        assert!(
+            out.contains("requires_if: [{ value: \"json\", key: FLAG_SCHEMA }]"),
+            "{out}"
+        );
+        assert!(
+            out.contains("required_if_eq: [{ key: FLAG_MODE, value: \"remote\" }]"),
+            "{out}"
+        );
+        assert!(out.contains("default_if: ["), "{out}");
+        assert!(out.contains("when: \"json\""), "{out}");
+    }
+
+    #[test]
+    fn completion_fields_reach_generated_ruby() {
+        let out = ruby(
+            r#"
+            name "ex"
+            bin "ex"
+            cmd "run" help="Run it" restart_token=":::" {
+                alias "r"
+                alias "hidden-run" hide=#true
+                flag "--force" help="Force it"
+                flag "--secret" hide=#true
+            }
+        "#,
+        );
+        assert!(out.contains("restart_token: \":::\""), "{out}");
+        let root = out
+            .split("ROOT = begin")
+            .nth(1)
+            .unwrap()
+            .split("META =")
+            .next()
+            .unwrap();
+        assert!(root.contains("aliases: [\"r\", \"hidden-run\"]"), "{out}");
+        let completion = out
+            .split("COMPLETION = Usage::CompletionMetadata.new(")
+            .nth(1)
+            .unwrap()
+            .split("COMPLETER =")
+            .next()
+            .unwrap();
+        assert!(completion.contains("aliases: [\"r\"]"), "{out}");
+        assert!(!completion.contains("hidden-run"), "{out}");
+        assert!(completion.contains("description: \"Run it\""), "{out}");
+        assert!(completion.contains("description: \"Force it\""), "{out}");
+        assert!(completion.contains("hidden: true"), "{out}");
+        assert!(out.contains("def self.complete(args = ARGV)"), "{out}");
+        assert!(out.contains("def self.completion_script(shell)"), "{out}");
+    }
 }

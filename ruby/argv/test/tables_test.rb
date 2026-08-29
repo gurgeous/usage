@@ -23,4 +23,15 @@ class TablesTest < Minitest::Test
     assert_equal "root short\n", pages.render(short)
     assert_equal "root long\n\nfirst long\n\nsecond long\n", pages.render(all)
   end
+
+  def test_metadata_lookup_requires_a_dense_matching_key
+    [Usage::Metadata, Usage::CompletionMetadata].each do |type|
+      table = type.new([{key: 1, name: "a"}, {key: 2, name: "b"}, {key: 3, name: "c"}])
+      assert_equal "b", table[2][:name]
+      assert_nil table[0]
+      assert_nil table[4]
+      assert_nil table[1 << 40]
+      assert_nil type.new([{key: 7, name: "wrong"}])[1]
+    end
+  end
 end
