@@ -1,3 +1,5 @@
+# Splits a shell command line at the cursor the way the shell would, yielding the
+# words before the cursor and the partial word under it.
 module Usage
   class SplitLine
     attr_reader(*%i[cword prefix words])
@@ -9,12 +11,16 @@ module Usage
       @cword, @prefix, @words = split(line, cursor, shell)
     end
 
+    # Words after the binary and before the cursor: what the parser walks.
     def argv
       words[[1, cword].min...cword]
     end
 
     private
 
+    # Scans char by char tracking quote state, recording the word index and partial
+    # prefix as soon as the cursor byte offset is reached. `started` distinguishes an
+    # empty quoted word from whitespace, so `"" <cursor>` still yields a word.
     def split(line, cursor, shell)
       chars = line.each_char.to_a
       offsets = [0]

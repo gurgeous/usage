@@ -1,3 +1,5 @@
+# Completion candidates and their shell-specific wire format. The file markers are
+# control-character lines the completion scripts strip out to pick a file mode.
 module Usage
   COMPLETION_MARKERS = {
     any: "\x01files",
@@ -9,6 +11,7 @@ module Usage
   CompletionCandidate = Struct.new(*%i[description kind value])
 
   CompletionAnswer = Struct.new(*%i[candidates files]) do
+    # Renders candidates for the shell, appending the file-mode marker if any.
     def render(shell)
       available = candidates.select { travels?(_1.value) }
       described = available.any? { !_1.description.to_s.empty? }
@@ -32,6 +35,7 @@ module Usage
       end
     end
 
+    # Collapses control characters to single spaces so a description stays one line.
     def one_line(value)
       output = +""
       spaced = false

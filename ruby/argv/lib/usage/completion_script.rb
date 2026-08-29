@@ -1,4 +1,7 @@
 module Usage
+  # Renders the static per-shell script that calls back into `bin __complete_word__`.
+  # Each template parses the candidate lines and the file-mode marker, then delegates
+  # path completion to the shell itself.
   class CompletionScript
     BASH = <<~'BASH'
       _usage_complete_{bin}() {
@@ -242,6 +245,7 @@ module Usage
       end
     end
 
+    # Nushell identifiers cannot hold punctuation, so escape it as _xNN.
     def nu_ident
       bin.each_char.map { _1.match?(/[A-Za-z0-9]/) ? _1 : "_x#{_1.ord.to_s(16).rjust(2, "0")}" }.join
     end

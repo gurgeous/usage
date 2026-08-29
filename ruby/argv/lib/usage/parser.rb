@@ -1,4 +1,6 @@
 module Usage
+  # Parses argv against a generated parse table, then resolves what it found against
+  # metadata: env and default fallbacks, choices, and required/conflict relationships.
   class Parser
     HELP_SHORT = Flag.new(key: 0, name: "help", shorts: ["h"], action: :help_short)
     VERSION_SHORT = Flag.new(key: 0, name: "version", shorts: ["V"], action: :version)
@@ -20,10 +22,13 @@ module Usage
         %w[1 true True TRUE].include?(value)
       end
 
+      # The bare command name from argv0, without directories or a .exe suffix.
       def multicall_basename(argv0)
         argv0.to_s.split(/[\\\/]/).last.to_s.sub(/\.exe\z/i, "")
       end
 
+      # For multicall binaries: when invoked under an alias, push that name onto argv so
+      # it selects the matching subcommand.
       def rewrite_multicall(argv0, args, name, bin)
         argv0 ||= $PROGRAM_NAME
         base = multicall_basename(argv0)
@@ -53,6 +58,7 @@ module Usage
       @seen = 0
     end
 
+    # Consumes argv one step at a time, then resolves the bindings into a Parsed.
     def parse
       while @pos < argv.length || !@bundle.empty?
         step
@@ -66,6 +72,7 @@ module Usage
 
     private
 
+    # Handles one token (or one letter of a short-flag bundle) and advances.
     def step
       return short_flag unless @bundle.empty?
 
@@ -143,6 +150,7 @@ module Usage
       word(token)
     end
 
+    # Binds --name, --name=value, or a --no-name style negation.
     def long_flag(token)
       name, attached = token[2..].split("=", 2)
       if (flag = find_long(name))
@@ -170,6 +178,7 @@ module Usage
       word(token)
     end
 
+    # Consumes the leading letter of @bundle; a value-taking flag claims the rest.
     def short_flag
       letter, rest = @bundle[0], @bundle[1..]
       flag = find_short(letter)
@@ -194,6 +203,7 @@ module Usage
       bind_flag(flag, value, !value.nil?)
     end
 
+    # The value from the following token, if that token may be consumed as one.
     def detached_value(flag)
       return missing_or_default(flag) if flag.require_equals
       if @pos < argv.length
@@ -206,6 +216,7 @@ module Usage
       missing_or_default(flag)
     end
 
+    # Falls back to default_missing, or records the flag as awaiting for completions.
     def missing_or_default(flag)
       return flag.default_missing if present?(flag.default_missing)
       return nil if flag.value_optional
@@ -224,6 +235,8 @@ module Usage
       end
     end
 
+    # A non-flag token: a subcommand, the help command, a default subcommand, a sigil
+    # value, an external command's argv, or a positional.
     def word(token)
       unless @arg_filled || @flags_stopped
         if (subcommand = find_named(cmd, token))
@@ -279,6 +292,7 @@ module Usage
       bind_argument(arg, token, delimit)
     end
 
+    # @seen orders bindings so overrides can tell which came last.
     def bind_flag(flag, value, has_value, negated = false)
       @seen += 1
       item = (bound[flag.key] ||= Bound.new)
@@ -305,6 +319,7 @@ module Usage
       bind_argument(arg, token[sigil.length..])
     end
 
+    # Enters a subcommand, resetting positional state to the new command's arguments.
     def descend(command)
       ancestors << cmd
       @cmd = command
@@ -315,6 +330,7 @@ module Usage
       @arg_filled = @cmd_arg_found = false
     end
 
+    # Closes the current clause instance, if the command groups args into clauses.
     def finish_clause
       return unless cmd.clause
 
@@ -322,6 +338,9 @@ module Usage
       @clause_values = {}
     end
 
+    # Turns bindings into final values. Walks the command path so ancestors contribute
+    # their flags, fills each key from argv/env/default, then validates: choices and
+    # per-entry rules first, relationships once every value is known.
     def resolve
       lost, displaced = apply_overrides
       final, scope, ordered, requirements = {}, [], [], {}
@@ -363,6 +382,8 @@ module Usage
         clauses: resolved_clauses(final), external:)
     end
 
+    # Resolves one key: argv binding, else env (including fallback and deprecated
+    # names), else default unless a default_if condition should decide instead.
     def fill(key, value_less, bound)
       meta = metadata[key]
       if bound && (!bound.values.empty? || value_less)
@@ -385,6 +406,8 @@ module Usage
       {values: [], source: :unset, occurrences: bound&.occurrences.to_i, negated: bound&.negated}
     end
 
+    # Drops flags overridden by a later-given flag, keeping their values for choice
+    # checks. Equal positions mean the same token, so neither loses.
     def apply_overrides
       lost = {}
       bound.each do |key, item|
@@ -401,6 +424,7 @@ module Usage
       [lost, displaced]
     end
 
+    # Fills unset entries whose default depends on another entry being given.
     def apply_default_if(final, scope)
       scope.each do |key|
         item, meta = final[key], metadata[key]
@@ -416,6 +440,7 @@ module Usage
       end
     end
 
+    # Per-entry rules: duplicates, requiredness, choices, and value counts.
     def check_entry(meta, item, check_requirements = true)
       raise Error, "flag given more than once: #{meta[:name]}" if meta[:reject_duplicate] && item[:occurrences] > 1
       if check_requirements && meta[:required] && item[:values].empty? && item[:occurrences].zero?
@@ -433,6 +458,7 @@ module Usage
       end
     end
 
+    # Rejects values outside the declared choices.
     def check_choices(meta, values)
       return unless meta
       accepted = meta.fetch(:accepted_choices, meta.fetch(:choices, []))
@@ -443,6 +469,8 @@ module Usage
       raise Error, "invalid value for #{meta[:name]}" if invalid
     end
 
+    # Cross-entry rules. Given entries are checked for conflicts and what they require;
+    # unset entries are checked for the conditions that would have made them required.
     def check_relationships(final, scope, requirements)
       given = ->(key) { final[key] && %i[argv env].include?(final[key][:source]) }
       scope.each do |key|
@@ -477,6 +505,7 @@ module Usage
       end
     end
 
+    # The values a condition compares against; booleans normalize to "true"/"false".
     def relationship_values(meta, item)
       return item[:values] unless meta && meta[:boolean]
       case item[:source]
@@ -489,6 +518,7 @@ module Usage
       end
     end
 
+    # Resolves each clause instance on its own, over the surrounding values.
     def resolved_clauses(final)
       cmd_path.each_with_object({}) do |command, result|
         next unless command.clause
@@ -507,6 +537,7 @@ module Usage
       end
     end
 
+    # Moves to the next positional, skipping sigil-matched ones on either side.
     def advance_argument
       skip_sigil_arguments
       @arg_pos += 1
@@ -518,6 +549,8 @@ module Usage
       @arg_pos += 1 while @arg_pos < current_arguments.length && present?(current_arguments[@arg_pos].sigil)
     end
 
+    # Skips optional positionals when the remaining tokens only just cover the required
+    # ones still ahead.
     def reserve_for_required
       return unless cmd.allow_missing_positional && @arg_taken.zero?
       while (arg = current_arguments[@arg_pos]) && !arg.required
@@ -529,6 +562,7 @@ module Usage
       end
     end
 
+    # The argument whose sigil prefixes the token, longest sigil winning.
     def match_sigil(token)
       return if @flags_stopped
 
@@ -541,6 +575,7 @@ module Usage
       cmd.flags + ancestors.reverse.flat_map { _1.flags.select(&:global) }
     end
 
+    # Built-in -h/-V apply only when the command has not disabled or redefined them.
     def find_short(letter)
       flags_in_scope.find { _1.shorts.include?(letter) } ||
         (HELP_SHORT if letter == "h" && !cmd.disable_help_flag) ||
@@ -557,6 +592,8 @@ module Usage
       raise error
     end
 
+    # Whether -abc can be a bundle: every letter is known, up to the first that takes a
+    # value and swallows the rest.
     def bundle_known?(token)
       token[1..].chars.each do |letter|
         flag = find_short(letter)
@@ -566,6 +603,7 @@ module Usage
       true
     end
 
+    # Arms a variadic flag to keep taking following tokens, unless var_max is reached.
     def start_collecting(flag, first)
       @collected = values_in(first, flag.delimiter)
       @collecting = flag unless flag.var_max.to_i.positive? && flag.var_max <= 1

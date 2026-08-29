@@ -1,3 +1,4 @@
+# The result of a parse: values keyed by parse-table key, plus where each came from.
 module Usage
   class Parsed
     attr_reader(*%i[clauses cmd_keys external negated occurrence_counts sources values])
@@ -12,6 +13,8 @@ module Usage
       @values = values
     end
 
+    # A flag's boolean value, which depends on its source: argv honors negation,
+    # env parses truthy strings, defaults are already stringified.
     def boolean(key)
       case sources[key]
       when :argv

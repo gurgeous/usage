@@ -4,6 +4,8 @@ module Usage
     help_topic next_arg restarted sep_seen subcommands_possible
   ])
 
+  # Answers completion requests by parsing the words before the cursor, then offering
+  # whatever the parser could have accepted next at that position.
   class Completer
     REQUEST = "__complete_word__"
     SHELLS = %i[bash fish nu powershell zsh]
@@ -16,6 +18,7 @@ module Usage
       @root = root
     end
 
+    # Completes a raw command line at the cursor.
     def answer(line, cursor: nil, shell: :bash)
       shell = normalize_shell(shell)
       split = SplitLine.new(line, cursor:, shell:)
@@ -24,6 +27,7 @@ module Usage
       CompletionAnswer.new(candidates: found, files: files_at(position, split.prefix, found))
     end
 
+    # Handles argv when it is a completion request; returns nil otherwise.
     def respond(args)
       request = parse_request(args)
       return unless request
@@ -33,6 +37,9 @@ module Usage
 
     private
 
+    # Parses the words before the cursor and snapshots the parser state. Errors are
+    # expected (the line is incomplete); a restart token resets the position as if the
+    # command had just been entered.
     def walk(words)
       parser = Parser.new(root, metadata, words, env: {})
       help = nil
@@ -62,6 +69,8 @@ module Usage
       )
     end
 
+    # Every completion the position allows: values while collecting or awaiting a flag
+    # value, otherwise subcommands, flags, and the next positional's choices.
     def candidates(position, partial)
       return [] if position.external
       return value_candidates(position.awaiting, partial) if position.awaiting
@@ -125,6 +134,7 @@ module Usage
       end || []
     end
 
+    # Choices for `--flag=partial`, re-prefixed so the shell inserts the whole word.
     def attached_value(position, partial)
       form, value = partial.split("=", 2)
       return unless value && form.start_with?("--")
@@ -137,6 +147,9 @@ module Usage
       value_candidates(flag, value).each { _1.value = "#{form}=#{_1.value}" }
     end
 
+    # Flags reachable here (own flags plus inherited globals) with their visible forms.
+    # Nearer commands win: forms already taken by a closer flag are dropped, and a
+    # negation is offered only when no other flag has claimed it.
     def flags_in_scope(path)
       every_form = path.flat_map.with_index do |command, index|
         command.flags.filter_map { forms(_1) if index == path.length - 1 || _1.global }
@@ -164,6 +177,9 @@ module Usage
       found
     end
 
+    # Which filesystem completions the shell should add, if any: an explicit complete
+    # type wins, then a well-known value name, then a bare fallback when nothing else
+    # matched and the value is not constrained to choices.
     def files_at(position, partial, found)
       return if position.external
       return if position.flags_possible && partial.start_with?("-")
@@ -187,6 +203,7 @@ module Usage
       :any
     end
 
+    # Pulls --shell/--line/--cursor out of a __complete_word__ invocation.
     def parse_request(args)
       return unless args.first == REQUEST
 
@@ -207,6 +224,7 @@ module Usage
       request
     end
 
+    # Finds a command by key in the tree.
     def command_with_key(command, key)
       return command if command.key == key
 

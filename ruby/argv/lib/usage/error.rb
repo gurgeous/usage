@@ -1,3 +1,4 @@
+# Parser signals. Help and Version unwind the parse instead of returning a value.
 module Usage
   class Error < StandardError
   end

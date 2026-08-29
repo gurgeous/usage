@@ -1,3 +1,5 @@
+# The parse-table structs a generated CLI hands to the parser, plus the sidecar
+# metadata/help tables looked up by the same integer keys.
 module Usage
   Command = Struct.new(*%i[
     aliases allow_missing_positional arg_required_else_help args
@@ -47,6 +49,8 @@ module Usage
     end
   end
 
+  # Keys are 1-based indices into entries; the stored key is re-checked so a table
+  # that omits entries yields nil rather than the wrong one.
   Metadata = Struct.new(:entries) do
     def [](key)
       return if key <= 0
@@ -79,6 +83,7 @@ module Usage
       render_all(error.cmd_key)
     end
 
+    # A page followed by every descendant page, for --help-all.
     def render_all(key)
       page = entries.fetch(key)
       ([page.long] + page.children.map { render_all(_1) }).join("\n")
