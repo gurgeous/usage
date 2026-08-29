@@ -11,6 +11,8 @@ module Usage
       external flags_stopped metadata sep_seen
     ])
 
+    # What one key accumulated while binding. `at` is the @seen counter of its last
+    # occurrence, which is how overrides tell two flags apart.
     Bound = Struct.new(:values, :occurrences, :negated, :at) do
       def initialize
         super([], 0, false, 0)
@@ -40,22 +42,22 @@ module Usage
 
     def initialize(root, metadata, argv, env: ENV)
       @ancestors = []
-      @arg_pos = @arg_taken = 0
+      @arg_pos = @arg_taken = 0  # next positional to fill, and how many words it holds
       @argv = argv.dup
       @bound = {}
-      @bundle = ""
-      @clause_values = {}
-      @clauses = Hash.new { _1[_2] = [] }
-      @collecting = nil
+      @bundle = ""  # unread letters of a short bundle: "vf" of -xvf
+      @clause_values = {}  # the clause instance being read
+      @clauses = Hash.new { _1[_2] = [] }  # finished instances, by command key
+      @collecting = nil  # variadic flag still claiming tokens
       @cmd = root
       @cmd_path = [root]
-      @cmd_starts = {root.key => 0}
+      @cmd_starts = {root.key => 0}  # where each command's own words began
       @dont_delimit_trailing_values = root.dont_delimit_trailing_values
       @env = env
       @external = []
       @metadata = metadata
       @pos = 0
-      @seen = 0
+      @seen = 0  # binding counter, so overrides can order two flags
     end
 
     # Consumes argv one step at a time, then resolves the bindings into a Parsed.
@@ -74,6 +76,7 @@ module Usage
 
     # Handles one token (or one letter of a short-flag bundle) and advances.
     def step
+      # A partly-read bundle comes first: its letters are still the current token.
       return short_flag unless @bundle.empty?
 
       if cmd.cmd_precedence_over_arg && !@flags_stopped &&
@@ -84,6 +87,7 @@ module Usage
         return
       end
 
+      # A variadic flag keeps claiming tokens until one could be something else.
       if @collecting && @pos < argv.length
         token = argv[@pos]
         if present?(@collecting.value_terminator) && token == @collecting.value_terminator
@@ -106,6 +110,7 @@ module Usage
 
       token = argv[@pos]
       @pos += 1
+      # A new clause instance: positionals restart, flags become possible again.
       if !sep_seen && cmd.clause && token == cmd.clause.sep
         finish_clause
         @arg_pos = @arg_taken = 0
@@ -116,6 +121,7 @@ module Usage
       end
       return word(token) if @flags_stopped
 
+      # Ask the argument that would receive it first — `preserve` wants it as a value.
       if token == "--"
         return word(token) if next_argument&.double_dash == :preserve
 
@@ -138,6 +144,8 @@ module Usage
         return word(token) if cmd.external_cmd && !@arg_filled
       end
 
+      # The whole bundle is checked before any letter binds: an unknown letter rejects
+      # the token, not just its tail.
       if flag_like?(token)
         return long_flag(token) if token.start_with?("--")
         unless bundle_known?(token)
@@ -225,6 +233,7 @@ module Usage
       raise Error, "missing value for flag: #{flag.name}"
     end
 
+    # Flags that end the parse rather than binding a value.
     def action!(flag, long:)
       case flag.action
       when :help then help!(long:)
@@ -269,6 +278,7 @@ module Usage
         end
       end
 
+      # Sigils still match once positionals are full: they name their own argument.
       if @arg_filled && (matched = match_sigil(token))
         return bind_sigil(token, matched)
       end
@@ -312,6 +322,7 @@ module Usage
       item.values.concat(split_value(value, delimit ? arg.delimiter : nil))
     end
 
+    # Binds the text after a sigil, which must not be empty: `+` alone names no tag.
     def bind_sigil(token, matched)
       arg, sigil = matched
       raise Error, "invalid value for #{arg.name}: #{token}: expected a value after sigil #{sigil}" if token == sigil
@@ -344,6 +355,7 @@ module Usage
     def resolve
       lost, displaced = apply_overrides
       final, scope, ordered, requirements = {}, [], [], {}
+      # Ancestors contribute their flags, but a subcommand can waive their requirements.
       cmd_path.each_with_index do |command, index|
         check_requirements = index == cmd_path.length - 1 || !command.cmd_negates_requirements
         command.flags.each do |flag|
@@ -361,6 +373,8 @@ module Usage
         end
       end
       apply_default_if(final, scope)
+      # Per-entry rules first, so relationships see values that are already valid.
+      # An overridden flag is checked for choices only: it was given, but it has no value.
       ordered.each do |key|
         if lost[key]
           check_choices(metadata[key], displaced[key])
@@ -613,6 +627,7 @@ module Usage
       present?(delimiter) ? value.split(delimiter, -1) : [value]
     end
 
+    # Env and default text splits like an argv value; a non-variadic entry keeps one.
     def fallback_values(meta, values)
       values = values.flat_map { split_value(_1, meta[:delimiter]) }
       meta[:variadic] ? values : values.first(1)

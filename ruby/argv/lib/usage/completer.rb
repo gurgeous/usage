@@ -126,6 +126,7 @@ module Usage
       end
     end
 
+    # Declared choices only. A value the spec did not enumerate is the shell's to guess.
     def value_candidates(entry, partial)
       return [] unless entry
 
@@ -235,6 +236,7 @@ module Usage
       nil
     end
 
+    # What a conventional value name implies, when the spec declared no complete type.
     def files_for(name)
       case name&.downcase
       when "file", "path", "config_file" then :any

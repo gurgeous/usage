@@ -22,6 +22,8 @@ module Usage
 
     private
 
+    # zsh takes three tab-separated columns (display, description, insert); the others
+    # take a value and an optional description, but only if some candidate has one.
     def render_candidate(candidate, shell, described)
       description = one_line(candidate.description)
       case shell
@@ -51,6 +53,7 @@ module Usage
       output.rstrip
     end
 
+    # zsh inserts this column verbatim, so anything the shell would re-read is quoted.
     def zsh_quote(value)
       return value if value.match?(/\A[A-Za-z0-9_.\-\/:@+=%,]+\z/)
 
@@ -58,6 +61,8 @@ module Usage
     end
 
     # one-liners
+    # Candidates are newline- and tab-separated on the wire, so a value holding either
+    # would be read back as two; it is dropped rather than mangled.
     def travels?(value) = value.each_byte.none? { _1 < 0x20 || _1 == 0x7f }
   end
 end

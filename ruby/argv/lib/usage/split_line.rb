@@ -4,6 +4,8 @@ module Usage
   class SplitLine
     attr_reader(*%i[cword prefix words])
 
+    # A cursor past the end means end of line, and one landing inside a multi-byte
+    # character moves back to its start — a completion request is no place to be strict.
     def initialize(line, cursor: nil, shell: :bash)
       cursor = line.bytesize if cursor.nil? || cursor.negative? || cursor > line.bytesize
       cursor -= 1 while cursor.positive? && continuation_byte?(line.getbyte(cursor))
@@ -29,10 +31,15 @@ module Usage
       word = +""
       cword = 0
       prefix = +""
+      # `started` is whether anything was written into `word`, including a quote holding
+      # nothing, so that `ex ""` is a word rather than a gap.
       found = cursor_in_word = started = false
       quote = nil
       index = 0
 
+      # Called before the character it precedes is read, and again before an escape takes
+      # the next one — otherwise a cursor on an escaped character goes unnoticed and the
+      # split describes the previous word.
       reached = lambda do |offset|
         next unless offset == cursor && !found
 
@@ -98,12 +105,14 @@ module Usage
         index += 1
       end
 
+      # The cursor sat at the end of the line.
       unless found
         cword = words.length
         prefix = word.dup
         cursor_in_word = started
       end
       words << word if started
+      # A cursor in the gap between words is completing one not typed yet, so make it.
       words.insert(cword, "") unless cursor_in_word
       [cword, prefix, words]
     end

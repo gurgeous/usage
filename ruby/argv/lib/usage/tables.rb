@@ -1,6 +1,8 @@
 # The parse-table structs a generated CLI hands to the parser, plus the sidecar
 # metadata/help tables looked up by the same integer keys.
 module Usage
+  # One command node. Most fields are policies the parser reads at the single
+  # decision point each governs; `key` indexes the metadata tables.
   Command = Struct.new(*%i[
     aliases allow_missing_positional arg_required_else_help args
     args_conflict_with_cmds clause cmd_negates_requirements
@@ -18,6 +20,8 @@ module Usage
     end
   end
 
+  # A flag declaration: its spellings, whether it takes a value, and how that value
+  # may be written. Hidden longs/shorts still parse, they just do not complete.
   Flag = Struct.new(*%i[
     action allow_hyphen_values allow_negative_numbers bool_value
     default_missing delimiter global hidden_longs hidden_shorts key longs name
@@ -33,6 +37,8 @@ module Usage
     end
   end
 
+  # A positional declaration. `sigil` marks one matched by prefix (`+tag`), and
+  # `double_dash` says how it relates to a `--` separator.
   Argument = Struct.new(*%i[
     allow_negative_numbers delimiter double_dash key name required sigil
     value_terminator var_max variadic
@@ -42,6 +48,7 @@ module Usage
     end
   end
 
+  # A repeating group of positionals; every `sep` in argv starts a new instance.
   Clause = Struct.new(*%i[args key name sep]) do
     def initialize(key:, name:, sep:, **)
       super
@@ -60,6 +67,8 @@ module Usage
     end
   end
 
+  # Descriptions, aliases, and hidden marks, keyed like Metadata and read only while
+  # completing.
   CompletionMetadata = Struct.new(:entries) do
     def [](key)
       return if key <= 0
@@ -69,6 +78,8 @@ module Usage
     end
   end
 
+  # Help text rendered at generation time. `children` are the keys under this page,
+  # for --help-all.
   HelpPage = Struct.new(*%i[children long short])
 
   HelpPages = Struct.new(:entries) do

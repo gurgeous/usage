@@ -3,6 +3,7 @@ module Usage
   # Each template parses the candidate lines and the file-mode marker, then delegates
   # path completion to the shell itself.
   class CompletionScript
+    # Reads candidates into COMPREPLY, then hands paths to compgen.
     BASH = <<~'BASH'
       _usage_complete_{bin}() {
           local out line files=
@@ -37,6 +38,7 @@ module Usage
       complete -F _usage_complete_{bin} '{bin}'
     BASH
 
+    # Prints candidates as it reads them; fish has no array to fill.
     FISH = <<~'FISH'
       function __usage_complete_{bin}
           set -l line (commandline -cp)
@@ -78,6 +80,8 @@ module Usage
       complete -c '{bin}' -f -a '(__usage_complete_{bin})'
     FISH
 
+    # Rebuilds a line from nushell's spans, and chains to any completer already set.
+    # Returning null rather than an empty list is what lets nushell fall back to paths.
     NU = <<~'NU'
       def --env __usage_complete_{ident} [spans: list<string>] {
           let line = ($spans | each {|span|
@@ -130,6 +134,7 @@ module Usage
       }
     NU
 
+    # Slices the line from the command's own extent, since $wordToComplete is one word.
     POWERSHELL = <<~POWERSHELL
       Register-ArgumentCompleter -Native -CommandName '{bin}' -ScriptBlock {
           param($wordToComplete, $commandAst, $cursorPosition)
@@ -169,6 +174,7 @@ module Usage
       }
     POWERSHELL
 
+    # Pads descriptions into a column, and forces a menu when any insert was quoted.
     ZSH = <<~'ZSH'
       _{bin}() {
           local -a values=() descriptions=() inserts=()
@@ -220,6 +226,7 @@ module Usage
 
     attr_reader(*%i[bin shell])
 
+    # The name is interpolated into shell source, so only plain words are accepted.
     def initialize(bin, shell)
       raise ArgumentError, "binary name must be one plain shell word" unless bin.match?(/\A[A-Za-z0-9_.+-]+\z/)
 
