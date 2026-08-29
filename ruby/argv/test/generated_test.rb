@@ -22,6 +22,20 @@ class GeneratedTest < Minitest::Test
     assert_equal "rack", result.install.package
   end
 
+  def test_generated_fallbacks_use_delimiters
+    cli = generate(<<~KDL, "GeneratedFallbackDelimiters")
+      name "ex"
+      bin "ex"
+      flag "--env-tag <tag>" var=#true delimiter="," env="EX_TAGS"
+      flag "--default-tag <tag>" var=#true delimiter="," default="a,b"
+    KDL
+
+    parsed = Usage::Parser.new(cli::ROOT, cli::META, [], env: {"EX_TAGS" => "a,b"}).parse
+
+    assert_equal %w[a b], parsed.values.fetch(cli::FLAG_ENV_TAG)
+    assert_equal %w[a b], parsed.values.fetch(cli::FLAG_DEFAULT_TAG)
+  end
+
   def test_generated_external_result
     cli = generate(<<~KDL, "GeneratedExternal")
       name "ex"
