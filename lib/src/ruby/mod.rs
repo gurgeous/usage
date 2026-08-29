@@ -476,9 +476,10 @@ impl<'a> Emitter<'a> {
         let _ = writeln!(self.out, "  META = Usage::Metadata.new(\n    [");
         for key in 1..=self.next_key {
             let value = by_key.get(&key).map(String::as_str).unwrap_or("nil");
-            let _ = writeln!(self.out, "      {value},");
+            let comma = if key == self.next_key { "" } else { "," };
+            let _ = writeln!(self.out, "      {value}{comma}");
         }
-        self.out.push_str("    ],\n  )\n\n");
+        self.out.push_str("    ]\n  )\n\n");
     }
 
     fn completion_metadata(&mut self, commands: &[Emitted]) {
@@ -515,10 +516,11 @@ impl<'a> Emitter<'a> {
             .push_str("  COMPLETION = Usage::CompletionMetadata.new(\n    [\n");
         for key in 1..=self.next_key {
             let value = by_key.get(&key).map(String::as_str).unwrap_or("nil");
-            let _ = writeln!(self.out, "      {value},");
+            let comma = if key == self.next_key { "" } else { "," };
+            let _ = writeln!(self.out, "      {value}{comma}");
         }
         self.out.push_str(concat!(
-            "    ],\n",
+            "    ]\n",
             "  )\n",
             "  COMPLETER = Usage::Completer.new(ROOT, META, COMPLETION)\n\n",
         ));
@@ -554,7 +556,7 @@ impl<'a> Emitter<'a> {
                 .collect::<Vec<_>>()
         });
         self.out.push_str("  HELP = Usage::HelpPages.new(\n    {\n");
-        for (command, (long, short)) in commands.iter().zip(pages) {
+        for (index, (command, (long, short))) in commands.iter().zip(pages).enumerate() {
             let mut children = command
                 .subcommands
                 .iter()
@@ -586,6 +588,7 @@ impl<'a> Emitter<'a> {
                 &long,
                 &format!("USAGE_HELP_{}_LONG", command.named.number),
                 8,
+                true,
             );
             ruby_heredoc(
                 &mut self.out,
@@ -593,10 +596,12 @@ impl<'a> Emitter<'a> {
                 &short,
                 &format!("USAGE_HELP_{}_SHORT", command.named.number),
                 8,
+                false,
             );
-            self.out.push_str("      ),\n");
+            let comma = if index + 1 == commands.len() { "" } else { "," };
+            let _ = writeln!(self.out, "      ){comma}");
         }
-        self.out.push_str("    },\n  )\n\n");
+        self.out.push_str("    }\n  )\n\n");
     }
 
     fn result_classes(&mut self, commands: &[Emitted]) {
@@ -671,7 +676,7 @@ impl<'a> Emitter<'a> {
         self.out
             .push_str("    parsed = Usage::Parser.new(ROOT, META, args).parse\n");
         let _ = writeln!(self.out, "    cli = {}.new", root.class);
-        self.out.push_str("    cmds = { CMD_ROOT => cli }\n");
+        self.out.push_str("    cmds = {CMD_ROOT => cli}\n");
         if commands.len() > 1 {
             self.out
                 .push_str("\n    parsed.cmd_keys.drop(1).each do |key|\n      case key\n");
@@ -866,8 +871,9 @@ fn ruby_call(name: &str, fields: &[(&str, String)], indent: usize) -> String {
     let field_indent = " ".repeat(indent + 2);
     let closing_indent = " ".repeat(indent);
     let mut out = format!("{name}.new(\n");
-    for (key, value) in fields {
-        let _ = writeln!(out, "{field_indent}{key}: {value},");
+    for (index, (key, value)) in fields.iter().enumerate() {
+        let comma = if index + 1 == fields.len() { "" } else { "," };
+        let _ = writeln!(out, "{field_indent}{key}: {value}{comma}");
     }
     let _ = write!(out, "{closing_indent})");
     out
@@ -877,8 +883,9 @@ fn ruby_hash(fields: &[(&str, String)], indent: usize) -> String {
     let field_indent = " ".repeat(indent + 2);
     let closing_indent = " ".repeat(indent);
     let mut out = String::from("{\n");
-    for (key, value) in fields {
-        let _ = writeln!(out, "{field_indent}{key}: {value},");
+    for (index, (key, value)) in fields.iter().enumerate() {
+        let comma = if index + 1 == fields.len() { "" } else { "," };
+        let _ = writeln!(out, "{field_indent}{key}: {value}{comma}");
     }
     let _ = write!(out, "{closing_indent}}}");
     out
@@ -888,8 +895,9 @@ fn multiline_array(values: &[String], indent: usize) -> String {
     let value_indent = " ".repeat(indent + 2);
     let closing_indent = " ".repeat(indent);
     let mut out = String::from("[\n");
-    for value in values {
-        let _ = writeln!(out, "{value_indent}{value},");
+    for (index, value) in values.iter().enumerate() {
+        let comma = if index + 1 == values.len() { "" } else { "," };
+        let _ = writeln!(out, "{value_indent}{value}{comma}");
     }
     let _ = write!(out, "{closing_indent}]");
     out
@@ -1602,7 +1610,15 @@ fn ruby_string(value: &str) -> String {
 }
 
 #[cfg(feature = "cli-help")]
-fn ruby_heredoc(out: &mut String, field: &str, value: &str, base: &str, indent: usize) {
+fn ruby_heredoc(
+    out: &mut String,
+    field: &str,
+    value: &str,
+    base: &str,
+    indent: usize,
+    comma: bool,
+) {
+    let comma = if comma { "," } else { "" };
     if !value.ends_with('\n')
         || value
             .chars()
@@ -1613,7 +1629,7 @@ fn ruby_heredoc(out: &mut String, field: &str, value: &str, base: &str, indent: 
     {
         let _ = writeln!(
             out,
-            "{}{field}: {},",
+            "{}{field}: {}{comma}",
             " ".repeat(indent),
             ruby_string(value)
         );
@@ -1627,7 +1643,7 @@ fn ruby_heredoc(out: &mut String, field: &str, value: &str, base: &str, indent: 
     }
     let spaces = " ".repeat(indent);
     let content_spaces = " ".repeat(indent + 2);
-    let _ = writeln!(out, "{spaces}{field}: <<~'{marker}',");
+    let _ = writeln!(out, "{spaces}{field}: <<~{marker}{comma}");
     for line in value.split_inclusive('\n') {
         if line != "\n" {
             out.push_str(&content_spaces);

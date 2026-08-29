@@ -18,12 +18,12 @@ module Ex
   ROOT = begin
     cmd_exec_nested = Usage::Command.new(
       name: "nested",
-      key: CMD_EXEC_NESTED,
+      key: CMD_EXEC_NESTED
     )
     cmd_exec = Usage::Command.new(
       name: "exec",
       key: CMD_EXEC,
-      cmds: [cmd_exec_nested],
+      cmds: [cmd_exec_nested]
     )
     cmd_run = Usage::Command.new(
       name: "run",
@@ -32,8 +32,8 @@ module Ex
         Usage::Flag.new(
           key: FLAG_RUN_NEEDS_TASK,
           name: "needs-task",
-          longs: ["needs-task"],
-        ),
+          longs: ["needs-task"]
+        )
       ],
       clause: Usage::Clause.new(
         key: CMD_RUN,
@@ -43,18 +43,18 @@ module Ex
           Usage::Argument.new(
             key: ARG_RUN_ITEMS_TASK,
             name: "task",
-            required: true,
-          ),
-        ],
+            required: true
+          )
+        ]
       ),
-      unknown_flags: :error,
+      unknown_flags: :error
     )
     Usage::Command.new(
       name: "ex",
       key: CMD_ROOT,
       cmds: [cmd_run, cmd_exec],
       unknown_flags: :error,
-      default_cmd: cmd_run,
+      default_cmd: cmd_run
     )
   end
 
@@ -68,37 +68,37 @@ module Ex
         flag: true,
         boolean: true,
         spelling: "--needs-task",
-        requires: [ARG_RUN_ITEMS_TASK],
+        requires: [ARG_RUN_ITEMS_TASK]
       },
       {
         key: ARG_RUN_ITEMS_TASK,
         name: "task",
-        required: true,
+        required: true
       },
       nil,
-      nil,
-    ],
+      nil
+    ]
   )
 
   COMPLETION = Usage::CompletionMetadata.new(
     [
       {
-        key: CMD_ROOT,
+        key: CMD_ROOT
       },
       {
-        key: CMD_RUN,
+        key: CMD_RUN
       },
       {
-        key: FLAG_RUN_NEEDS_TASK,
+        key: FLAG_RUN_NEEDS_TASK
       },
       nil,
       {
-        key: CMD_EXEC,
+        key: CMD_EXEC
       },
       {
-        key: CMD_EXEC_NESTED,
-      },
-    ],
+        key: CMD_EXEC_NESTED
+      }
+    ]
   )
   COMPLETER = Usage::Completer.new(ROOT, META, COMPLETION)
 
@@ -106,7 +106,7 @@ module Ex
     {
       CMD_ROOT => Usage::HelpPage.new(
         children: [CMD_EXEC, CMD_RUN],
-        long: <<~'USAGE_HELP_1_LONG',
+        long: <<~USAGE_HELP_1_LONG,
           Usage: ex <SUBCOMMAND>
 
           Commands:
@@ -117,7 +117,7 @@ module Ex
           Flags:
             -h, --help  Print help
         USAGE_HELP_1_LONG
-        short: <<~'USAGE_HELP_1_SHORT',
+        short: <<~USAGE_HELP_1_SHORT
           Usage: ex <SUBCOMMAND>
 
           Commands:
@@ -131,14 +131,14 @@ module Ex
       ),
       CMD_RUN => Usage::HelpPage.new(
         children: [],
-        long: <<~'USAGE_HELP_2_LONG',
+        long: <<~USAGE_HELP_2_LONG,
           Usage: ex run [--needs-task] <task> [::: <task>]…
 
           Flags:
                 --needs-task
             -h, --help        Print help
         USAGE_HELP_2_LONG
-        short: <<~'USAGE_HELP_2_SHORT',
+        short: <<~USAGE_HELP_2_SHORT
           Usage: ex run [--needs-task] <task> [::: <task>]…
 
           Flags:
@@ -148,7 +148,7 @@ module Ex
       ),
       CMD_EXEC => Usage::HelpPage.new(
         children: [CMD_EXEC_NESTED],
-        long: <<~'USAGE_HELP_5_LONG',
+        long: <<~USAGE_HELP_5_LONG,
           Usage: ex exec <SUBCOMMAND>
 
           Commands:
@@ -158,7 +158,7 @@ module Ex
           Flags:
             -h, --help  Print help
         USAGE_HELP_5_LONG
-        short: <<~'USAGE_HELP_5_SHORT',
+        short: <<~USAGE_HELP_5_SHORT
           Usage: ex exec <SUBCOMMAND>
 
           Commands:
@@ -171,20 +171,20 @@ module Ex
       ),
       CMD_EXEC_NESTED => Usage::HelpPage.new(
         children: [],
-        long: <<~'USAGE_HELP_6_LONG',
+        long: <<~USAGE_HELP_6_LONG,
           Usage: ex exec nested
 
           Flags:
             -h, --help  Print help
         USAGE_HELP_6_LONG
-        short: <<~'USAGE_HELP_6_SHORT',
+        short: <<~USAGE_HELP_6_SHORT
           Usage: ex exec nested
 
           Flags:
             -h, --help  Print help
         USAGE_HELP_6_SHORT
-      ),
-    },
+      )
+    }
   )
 
   class CLI
@@ -227,7 +227,7 @@ module Ex
     end
 
     cli = CLI.new
-    cmds = { CMD_ROOT => cli }
+    cmds = {CMD_ROOT => cli}
 
     parsed.cmd_keys.drop(1).each do |key|
       case key

@@ -163,7 +163,9 @@ run = [
 dir = "{{config_root}}"
 depends = ['install:ruby']
 run = [
-    'mbx run -q -p usage-cli -- generate ruby -f benches/mise.usage.kdl | ruby -c',
+    'mbx run -q -p usage-cli -- generate ruby -f benches/mise.usage.kdl -o target/usage-ruby-lint.rb',
+    'ruby -c target/usage-ruby-lint.rb',
+    'cd ruby/argv && bundle exec standardrb "{{config_root}}/target/usage-ruby-lint.rb"',
     'cd ruby/argv && bundle exec standardrb',
     'cd ruby/argv && gem build usage-rb.gemspec --output "{{config_root}}/target/usage-rb-test.gem"',
 ]

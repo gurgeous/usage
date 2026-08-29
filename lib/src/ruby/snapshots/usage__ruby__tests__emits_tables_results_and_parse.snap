@@ -28,16 +28,16 @@ module Ex
           key: FLAG_INSTALL_FORCE,
           name: "force",
           longs: ["force"],
-          shorts: ["f"],
-        ),
+          shorts: ["f"]
+        )
       ],
       args: [
         Usage::Argument.new(
           key: ARG_INSTALL_PKG,
           name: "pkg",
-          required: true,
-        ),
-      ],
+          required: true
+        )
+      ]
     )
     Usage::Command.new(
       name: "ex",
@@ -48,23 +48,23 @@ module Ex
           name: "verbose",
           longs: ["verbose"],
           shorts: ["v"],
-          global: true,
+          global: true
         ),
         Usage::Flag.new(
           key: FLAG_JOBS,
           name: "jobs",
           longs: ["jobs"],
-          takes_value: true,
-        ),
+          takes_value: true
+        )
       ],
       args: [
         Usage::Argument.new(
           key: ARG_FILE,
-          name: "file",
-        ),
+          name: "file"
+        )
       ],
       cmds: [cmd_install],
-      version: true,
+      version: true
     )
   end
 
@@ -76,7 +76,7 @@ module Ex
         name: "verbose",
         flag: true,
         boolean: true,
-        spelling: "--verbose",
+        spelling: "--verbose"
       },
       {
         key: FLAG_JOBS,
@@ -85,11 +85,11 @@ module Ex
         spelling: "--jobs",
         value_name: "n",
         default: ["2"],
-        env: "JOBS",
+        env: "JOBS"
       },
       {
         key: ARG_FILE,
-        name: "file",
+        name: "file"
       },
       nil,
       {
@@ -97,37 +97,37 @@ module Ex
         name: "force",
         flag: true,
         boolean: true,
-        spelling: "--force",
+        spelling: "--force"
       },
       {
         key: ARG_INSTALL_PKG,
         name: "pkg",
-        required: true,
-      },
-    ],
+        required: true
+      }
+    ]
   )
 
   COMPLETION = Usage::CompletionMetadata.new(
     [
       {
-        key: CMD_ROOT,
+        key: CMD_ROOT
       },
       {
-        key: FLAG_VERBOSE,
+        key: FLAG_VERBOSE
       },
       {
-        key: FLAG_JOBS,
+        key: FLAG_JOBS
       },
       nil,
       {
         key: CMD_INSTALL,
-        aliases: ["i"],
+        aliases: ["i"]
       },
       {
-        key: FLAG_INSTALL_FORCE,
+        key: FLAG_INSTALL_FORCE
       },
-      nil,
-    ],
+      nil
+    ]
   )
   COMPLETER = Usage::Completer.new(ROOT, META, COMPLETION)
 
@@ -135,7 +135,7 @@ module Ex
     {
       CMD_ROOT => Usage::HelpPage.new(
         children: [CMD_INSTALL],
-        long: <<~'USAGE_HELP_1_LONG',
+        long: <<~USAGE_HELP_1_LONG,
           ex 1.2.3
           Usage: ex [-v --verbose] [--jobs <n>] [file] <SUBCOMMAND>
 
@@ -154,7 +154,7 @@ module Ex
             -h, --help      Print help
             -V, --version   Print version
         USAGE_HELP_1_LONG
-        short: <<~'USAGE_HELP_1_SHORT',
+        short: <<~USAGE_HELP_1_SHORT
           ex 1.2.3
           Usage: ex [-v --verbose] [--jobs <n>] [file] <SUBCOMMAND>
 
@@ -174,7 +174,7 @@ module Ex
       ),
       CMD_INSTALL => Usage::HelpPage.new(
         children: [],
-        long: <<~'USAGE_HELP_5_LONG',
+        long: <<~USAGE_HELP_5_LONG,
           Usage: ex install [-f --force] <pkg>
 
           Arguments:
@@ -187,7 +187,7 @@ module Ex
           Global flags:
             -v, --verbose
         USAGE_HELP_5_LONG
-        short: <<~'USAGE_HELP_5_SHORT',
+        short: <<~USAGE_HELP_5_SHORT
           Usage: ex install [-f --force] <pkg>
 
           Arguments:
@@ -200,8 +200,8 @@ module Ex
           Global flags:
             -v, --verbose
         USAGE_HELP_5_SHORT
-      ),
-    },
+      )
+    }
   )
 
   class CLI
@@ -236,7 +236,7 @@ module Ex
     end
 
     cli = CLI.new
-    cmds = { CMD_ROOT => cli }
+    cmds = {CMD_ROOT => cli}
 
     parsed.cmd_keys.drop(1).each do |key|
       case key
